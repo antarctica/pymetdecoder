@@ -8,257 +8,10 @@
 ################################################################################
 # CONFIGURATION
 ################################################################################
-import re, types, pymetdecoder
-from . import code_tables as ct
-################################################################################
-# OBSERVATION CLASSES
-################################################################################
-class StationType(pymetdecoder.Observation):
-    """
-    Station Type
-
-    Section 0:
-        * MMMM - station type
-    """
-    def __init__(self, raw):
-        pymetdecoder.Observation.__init__(self, raw, availability=False)
-    def setValue(self):
-        # Set the value
-        if re.match("^(AA|BB|OO)XX$", self.raw):
-            self.value = self.raw
-        else:
-            raise pymetdecoder.DecodeError("{} is an invalid station type".format(self.raw))
-class Callsign(pymetdecoder.Observation):
-    """
-    Callsign
-
-    Section 0:
-        * D...D - Ship's callsign consisting of three or more alphanumeric characters
-        * A1bwnnn - WMO regional association area
-    """
-    def __init__(self, raw):
-        pymetdecoder.Observation.__init__(self, raw, availability=False)
-    def setValue(self):
-        # Set the values
-        if re.match("^(1[1-7]|2[1-6]|3[1-4]|4[1-8]|5[1-6]|6[1-6]|7[1-4])\d{3}$", self.raw):
-            self.region = ct.codeTable0161(self.raw[0:2])
-            self.id = self.raw
-        elif re.match("^[A-Z\d]{3,}", self.raw):
-            self.id = self.raw
-        else:
-            raise pymetdecoder.DecodeError("Unable to determine {} callsign information from {}".format(self.data["stationType"].value, self.raw))
-class ObservationTime(pymetdecoder.Observation):
-    """
-    Observation time
-
-    Section 0:
-        * YYGG - day and hour of observation
-    """
-    def __init__(self, raw):
-        pymetdecoder.Observation.__init__(self, raw, availability=False)
-    def setValue(self):
-        # Get the values
-        YY = self.raw[0:2]
-        GG = self.raw[2:4]
-
-        # Check observation time values are valid
-        if int(YY) > 31:
-            raise pymetdecoder.DecodeError("{} is an invalid value for observation day (YY)".format(YY))
-        if int(GG) > 24:
-            raise pymetdecoder.DecodeError("{} is an invalid value for observation hour (GG)".format(GG))
-
-        # Set the values
-        self.day  = YY
-        self.hour = GG
-class WindIndicator(pymetdecoder.Observation):
-    """
-    Wind indicator
-
-    Section 0:
-        * iw - Indicator for source and units of wind speed
-    """
-    def __init__(self, raw):
-        pymetdecoder.Observation.__init__(self, raw)
-    def setValue(self):
-        # Check indicator is valid
-        if not re.match("[0134/]$", self.raw):
-            raise pymetdecoder.DecodeError("{} is an invalid value for the wind indicator (iw)".format(self.raw))
-
-        # Set the values
-        self.value = int(self.raw)
-        self.unit  = "m/s" if self.value < 2 else "KT"
-        self.estimated = True if self.value in [0, 3] else False
-class StationPosition(pymetdecoder.Observation):
-    """
-    Station position
-
-    Section 0:
-        * 99LaLaLa QcLoLoLoLo - Latitude, globe quadrant and longitude
-        * MMMULaULo h0h0h0h0im - Mobile land station position
-    """
-    def __init__(self, raw):
-        pymetdecoder.Observation.__init__(self, raw)
-    def setValue(self):
-        # Check we have a valid number of raw groups
-        if len(self.raw.split()) not in [2, 4]:
-            raise pymetdecoder.DecodeError("Invalid groups for decoding station position ({})".format(self.raw))
-
-        # Set the values
-        LaLaLa   = int(self.raw[2:5]) # latitude
-        Qc       = int(self.raw[6:7]) # quadrant
-        LoLoLoLo = int(self.raw[7:11]) # longitude
-        self.latitude  = "{:.1f}".format(LaLaLa / (-10.0 if Qc in [3, 5] else 10.0))
-        self.longitude = "{:.1f}".format(LoLoLoLo / (-10.0 if Qc in [5, 7] else 10.0))
-
-        # The following is only for OOXX stations (MMMULaULo h0h0h0h0im)
-        if len(self.raw.split()) == 4:
-            MMM      = int(self.raw[12:15]) # Marsden square
-            ULa      = int(self.raw[15:16]) # Latitude unit
-            ULo      = int(self.raw[16:17]) # Longitude unit
-            h0h0h0h0 = int(self.raw[18:22]) # Elevation
-            im       = int(self.raw[22:23]) # Elevation indicator/confidence
-            if (not 1 <= MMM <= 623) and (not 901 <= MMM <= 936):
-                raise pymetdecoder.DecodeError("{} is not a valid Marsden Square".format(MMM))
-
-            confidence = ["Poor", "Excellent", "Good", "Fair"]
-            self.marsdenSquare = MMM
-            self.elevation = h0h0h0h0
-            self.elevationUnits = "m" if im <= 4 else "ft"
-            self.confidence = confidence[im % 4]
-    def isAvailable(self, char="/", value=None):
-        return False if re.match("^99/// /////", self.raw) else True
-class PrecipitationIndicator(pymetdecoder.Observation):
-    """
-    Precipitation indicator
-
-    Section 1:
-        * iR(ixhVV) - Precipitation indicator
-    """
-    def __init__(self, raw):
-        pymetdecoder.Observation.__init__(self, raw)
-    def setValue(self):
-        # Check indicator is valid
-        if not re.match("[01234/]$", self.raw):
-            raise pymetdecoder.DecodeError("{} is an invalid value for the precipitation indicator (iR)".format(self.raw))
-
-        self.value = int(self.raw)
-        self.inGroup1 = True if self.raw in [0, 1] else False
-        self.inGroup3 = True if self.raw in [0, 2] else False
-class WeatherIndicator(pymetdecoder.Observation):
-    """
-    Weather indicator
-
-    Section 1:
-        * (iR)ix(hVV) - Weather indicator
-    """
-    def __init__(self, raw):
-        pymetdecoder.Observation.__init__(self, raw)
-    def setValue(self):
-        # Check indicator is valid
-        if not re.match("[1234567/]$", self.raw):
-            raise pymetdecoder.DecodeError("{} is an invalid value for the weather indicator (iX)".format(self.raw))
-
-        self.value = int(self.raw)
-        self.automatic = True if self.value >= 4 else False
-class LowestCloudBase(pymetdecoder.Observation):
-    """
-    Weather indicator
-
-    Section 1:
-        * (iRix)h(VV) - Height above surface of the base of the lowest cloud
-    """
-    def __init__(self, raw, unit):
-        pymetdecoder.Observation.__init__(self, raw, unit)
-    def setValue(self):
-        min, max = ct.codeTable1600(int(self.raw))
-        self.min = min
-        self.max = max
-class Visibility(pymetdecoder.Observation):
-    """
-    Weather indicator
-
-    Section 1:
-        * (iRixh)VV - Horizontal visibility at surface
-    """
-    def __init__(self, raw, unit):
-        pymetdecoder.Observation.__init__(self, raw, unit)
-    def setValue(self):
-        visibility, quantifier = ct.codeTable4377(int(self.raw))
-        if visibility is not None:
-            self.visibility = visibility
-        if quantifier is not None:
-            self.quantifier = quantifier
-class CloudCover(pymetdecoder.Observation):
-    """
-    Cloud cover
-
-    Section 1:
-        * N(ddff) - Total cloud cover
-    """
-    def __init__(self, raw, unit):
-        pymetdecoder.Observation.__init__(self, raw, unit)
-    def setValue(self):
-        self.value = int(self.raw)
-        if self.value == 9:
-            self.obscured = True
-class SurfaceWind(pymetdecoder.Observation):
-        """
-        Surface wind
-
-        Section 1:
-            * (N)ddff - Surface wind direction and speed
-        """
-        def __init__(self, raw):
-            pymetdecoder.Observation.__init__(self, raw, availability=False)
-        def setValue(self):
-            dd = self.raw[0:2]
-            ff = self.raw[2:4]
-
-            # Set the wind direction
-            self.direction = pymetdecoder.Observation(dd, value="", unit="deg")
-            if self.direction.available:
-                direction, calm, varAllUnknown = ct.codeTable0877(int(dd))
-                self.direction.value = direction
-                self.direction.calm = calm
-                self.direction.varAllUnknown = varAllUnknown
-
-            # Set the wind speed
-            self.speed = pymetdecoder.Observation(ff, value="")
-            if self.speed.available:
-                self.speed.value = int(ff)
-
-            # Tidy attributes
-            delattr(self, "raw")
-# class Temperature(pymetdecoder.Observation):
-#     """
-#     Temperature observation
-#
-#     Section 1:
-#         * 1sTTT - air temperature
-#         * 2sTTT - dewpoint temperature
-#     """
-#     def __init__(self, raw, unit):
-#         pymetdecoder.Observation.__init__(self, raw, unit)
-#
-#         # Get the sign (sn) and the temperature (TTT)
-#         sn  = self.raw[1:2]
-#         TTT = self.raw[2:5]
-#
-#         # Set availability
-#         if not self.isAvailable(value=sn) or not self.isAvailable(value=TTT):
-#             self.available = False
-#
-#         # Set the values
-#         if self.available:
-#             if TTT[2] == "/":
-#                 TTT = temperature[TTT:2] + "0"
-#             sn = int(sn)
-#             TTT = int(TTT)
-#             if sn not in [0,1]:
-#                 raise pymetdecoder.DecodeError("{} is not a valid temperature sign code for code table 3845".format(sn))
-#
-#             # Set the value
-#             self.value = (TTT / 10.0) * (1 if sn == 0 else -1)
+import re
+import pymetdecoder
+from . import section0
+from . import section1
 ################################################################################
 # REPORT CLASSES
 ################################################################################
@@ -283,11 +36,11 @@ class SYNOP(pymetdecoder.Report):
         ### SECTION 0 ###
         try:
             # Get the message type
-            self.data["stationType"] = StationType(next(groups))
+            self.data["stationType"] = section0.StationType(next(groups))
 
             # Add callsign for non-AAXX stations
             if self.data["stationType"].value != "AAXX":
-                self.data["callsign"] = Callsign(next(groups))
+                self.data["callsign"] = section0.Callsign(next(groups))
 
             # Get date, time and wind indictator
             self.parseYYGGi(next(groups))
@@ -299,9 +52,9 @@ class SYNOP(pymetdecoder.Report):
                     raise pymetdecoder.DecodeError("{} is an invalid IIiii group".format(group))
                 self.data["stationID"] = pymetdecoder.Observation(group, availability=False, value=group)
             elif self.data["stationType"].value == "BBXX":
-                self.data["stationPosition"] = StationPosition("{} {}".format(next(groups), next(groups)))
+                self.data["stationPosition"] = section0.StationPosition("{} {}".format(next(groups), next(groups)))
             else: # OOXX
-                self.data["stationPosition"] = StationPosition("{} {} {} {}".format(next(groups), next(groups), next(groups), next(groups)))
+                self.data["stationPosition"] = section0.StationPosition("{} {} {} {}".format(next(groups), next(groups), next(groups), next(groups)))
 
             # If this section ends with NIL, that's the end of the SYNOP
             next_group = next(groups)
@@ -323,14 +76,23 @@ class SYNOP(pymetdecoder.Report):
                     self.data["surfaceWind"].speed.value = int(next_group[2:5])
                     self.data["surfaceWind"].speed.raw += " {}".format(next_group)
                     next_group = next(groups)
-            #
-            # # Parse the next group, based on the group header
-            # for i in range(1, 10):
-            #     header = int(next_group[0:1])
-            #     if header == i:
-            #         if i == 1:
-            #             self.parseAirTemperature(next_group)
-            #         elif i == 2:
+
+            # Parse the next group, based on the group header
+            for i in range(1, 10):
+                header = int(next_group[0:1])
+                if header == i:
+                    if i == 1: # Air temperature
+                        if "temperature" not in self.data:
+                            self.data["temperature"] = {}
+                        self.data["temperature"]["air"] = section1.Temperature(next_group, "Cel")
+                    elif i == 2: # Dewpoint or relative humidity
+                        sn = next_group[1:2]
+                        if sn == "9":
+                            self.data["relativeHumidity"] = section1.RelativeHumidity(next_group, "%")
+                        else:
+                            if "temperature" not in self.data:
+                                self.data["temperature"] = {}
+                            self.data["temperature"]["dewpoint"] = section1.Temperature(next_group, "Cel")
             #             self.parseDewpointHumidity(next_group)
             #         elif i == 3:
             #             self.parseStationLevelPressure(next_group)
@@ -338,7 +100,7 @@ class SYNOP(pymetdecoder.Report):
             #             self.parseSeaLevelPressureGeopotential(next_group)
             #         elif i == 5:
             #             self.parsePressureTendency(next_group)
-            #         next_group = next(groups)
+                    next_group = next(groups)
         except StopIteration:
             return
 
@@ -352,10 +114,10 @@ class SYNOP(pymetdecoder.Report):
             raise pymetdecoder.DecodeError("{} is an invalid YYGGi group".format(group))
 
         # Add observation time to data
-        self.data["obsTime"] = ObservationTime(group[0:4])
+        self.data["obsTime"] = section0.ObservationTime(group[0:4])
 
         # Add wind indicator to data
-        self.data["windIndicator"] = WindIndicator(group[4])
+        self.data["windIndicator"] = section0.WindIndicator(group[4])
     def parseiihVV(self, group): # iihVV
         """
         Parses the precipitation and weather indicator and cloud base group (iihVV)
@@ -365,16 +127,16 @@ class SYNOP(pymetdecoder.Report):
             raise pymetdecoder.DecodeError("{} is an invalid iihVV group".format(group))
 
         # Get the precipitation indicator (iR)
-        self.data["precipitationIndicator"] = PrecipitationIndicator(group[0:1])
+        self.data["precipitationIndicator"] = section1.PrecipitationIndicator(group[0:1])
 
         # Get the weather indicator (ix)
-        self.data["weatherIndicator"] = WeatherIndicator(group[1:2])
+        self.data["weatherIndicator"] = section1.WeatherIndicator(group[1:2])
 
         # Get the lowest cloud base (h)
-        self.data["lowestCloudBase"] = LowestCloudBase(group[2:3], unit="m")
+        self.data["lowestCloudBase"] = section1.LowestCloudBase(group[2:3], unit="m")
 
         # Get the horizonal visibility (VV)
-        self.data["visibility"] = Visibility(group[3:5], unit="m")
+        self.data["visibility"] = section1.Visibility(group[3:5], unit="m")
     def parseNddff(self, group): # Nddff
         """
         Parses the cloud cover and surface wind group (Nddff)
@@ -383,10 +145,10 @@ class SYNOP(pymetdecoder.Report):
             raise pymetdecoder.DecodeError("{} is an invalid Nddff group".format(group))
 
         # Get total cloud cover (N)
-        self.data["cloudCover"] = CloudCover(group[0:1], unit="okta")
+        self.data["cloudCover"] = section1.CloudCover(group[0:1], unit="okta")
 
         # Get wind direction (dd) and wind speed (ff)
-        self.data["surfaceWind"] = SurfaceWind(group[1:5])
+        self.data["surfaceWind"] = section1.SurfaceWind(group[1:5])
         if hasattr(self.data["surfaceWind"], "speed") and hasattr(self.data["windIndicator"], "unit"):
             self.data["surfaceWind"].speed.setUnit(self.data["windIndicator"].unit)
 
@@ -400,7 +162,7 @@ class SYNOP(pymetdecoder.Report):
         # Prepare the data
         if "temperature" not in self.data:
             self.data["temperature"] = {}
-        self.data["temperature"]["air"] = Temperature(group, "Cel")
+        self.data["temperature"]["air"] = section1.Temperature(group, "Cel")
 
         # self._parseTemperature(group, sn, TTT, "air")
     def parseDewpointHumidity(self, group): # 2snTTT or 29UUU
