@@ -79,7 +79,11 @@ class SYNOP(pymetdecoder.Report):
 
             # Parse the next group, based on the group header
             for i in range(1, 10):
-                header = int(next_group[0:1])
+                try:
+                    header = int(next_group[0:1])
+                except ValueError as e:
+                    raise pymetdecoder.DecodeError("{} is not a valid section 1 group header".format(header))
+                    break
                 if header == i:
                     if i == 1: # Air temperature
                         if "temperature" not in self.data:
@@ -93,13 +97,53 @@ class SYNOP(pymetdecoder.Report):
                             if "temperature" not in self.data:
                                 self.data["temperature"] = {}
                             self.data["temperature"]["dewpoint"] = section1.Temperature(next_group, "Cel")
-            #             self.parseDewpointHumidity(next_group)
-            #         elif i == 3:
-            #             self.parseStationLevelPressure(next_group)
-            #         elif i == 4:
-            #             self.parseSeaLevelPressureGeopotential(next_group)
-            #         elif i == 5:
-            #             self.parsePressureTendency(next_group)
+                    elif i == 3: # Station pressure
+                        if not self._isGroupValid(next_group):
+                            raise pymetdecoder.DecodeError("{} is an invalid station level pressure group".format(next_group))
+
+                        # Create the data array
+                        self.data["stationPressure"] = section1.Pressure(next_group, "hPa")
+                    elif i == 4: # Sea level pressure or geopotential
+                        self.parseSeaLevelPressureGeopotential(next_group)
+                    elif i == 5: # Pressure tendency
+                        if not self._isGroupValid(next_group):
+                            raise pymetdecoder.DecodeError("{} is an invalid pressure tendency group".format(next_group))
+
+                        # Create the data array
+                        self.data["pressureTendency"] = section1.PressureTendency(next_group)
+                    elif i == 6: # Precipitation
+                        if not self._isGroupValid(next_group):
+                            raise pymetdecoder.DecodeError("{} is an invalid precipitation group".format(next_group))
+
+                        # Create the data array
+                        self.data["precipitation"] = section1.Precipitation(next_group)
+                    elif i == 7: # Present and past weather
+                        if not self._isGroupValid(next_group):
+                            raise pymetdecoder.DecodeError("{} is an invalid weather group".format(next_group))
+
+                        # If the weather indicator says we're not including a group 7 code, yet we find one
+                        # something went wrong somewhere
+                        if self.data["weatherIndicator"].value not in [1, 4, 7]:
+                            raise pymetdecoder.DecodeError("Group 7 codes found, despite reported as being omitted (ix = {})".format(self.data["weatherIndicator"].value))
+
+                        # Create the data array
+                        self.data["presentWeather"] = section1.Weather(next_group[1:3])
+                        self.data["pastWeather"] = [
+                            section1.Weather(next_group[3:4]),
+                            section1.Weather(next_group[4:5])
+                        ]
+                    elif i == 8: # Cloud type and amount
+                        if not self._isGroupValid(next_group):
+                            raise pymetdecoder.DecodeError("{} is an invalid cloud type/amount group".format(next_group))
+
+                        # Create the data array
+                        self.data["cloudTypes"] = section1.CloudTypes(next_group)
+                    elif i == 9: # Exact observation time
+                        if not self._isGroupValid(next_group):
+                            raise pymetdecoder.DecodeError("{} is an invalid exact observation time group".format(next_group))
+
+                        # Create the data array
+                        self.data["exactObsTime"] = section1.ExactObservationTime(next_group)
                     next_group = next(groups)
         except StopIteration:
             return
@@ -191,21 +235,6 @@ class SYNOP(pymetdecoder.Report):
             self.data["relativeHumidity"] = data
         else:
             self._parseTemperature(group, sn, TTT, "dewpoint")
-    def parseStationLevelPressure(self, group): # 3P0P0P0P0
-        """
-        Parses the station level pressure group (3P0P0P0P0)
-        """
-        if not self._isGroupValid(group):
-            raise pymetdecoder.DecodeError("{} is an invalid station level pressure group".format(group))
-
-        # Create the data array
-        P0P0P0P0 = group[1:5]
-        data = { "available": True, "raw": group, "unit": "hPa" }
-        if P0P0P0P0[1:4] == "///":
-            data["available"] = False
-        else:
-            data["value"] = (int(P0P0P0P0) / 10) + (0 if int(P0P0P0P0) > 500 else 1000)
-        self.data["stationPressure"] = data
     def parseSeaLevelPressureGeopotential(self, group): # 4PPPP or 4ahhh
         """
         Parses the sea level pressure/geopotential group (4PPPP or 4ahhh)
@@ -216,54 +245,9 @@ class SYNOP(pymetdecoder.Report):
         # Determine if this is pressure or geopotential height
         a = group[1]
         if a in ["0", "9"]:
-            self._parsePressure(group, "seaLevelPressure")
+            self.data["seaLevelPressure"] = section1.Pressure(group, "hPa")
         elif a in ["1", "2", "5", "7", "8", "/"]:
-            # Get the surface
-            surface = { "available": True, "unit": "hPa" }
-            if a == "/":
-                surface["available"] = False
-            else:
-                surface["value"] = ct.codeTable0264(int(a))
-
-            # Get the height
-            hhh    = group[2:5]
-            height = { "available": True, "unit": "gpm" }
-            if hhh == "///":
-                height["available"] = False
-            else:
-                a = int(a)
-                hhh = int(hhh)
-                if a == 2:
-                    hhh += 1000 if hhh < 300 else 0
-                elif a == 7:
-                    hhh += 3000 if hhh < 500 else 2000
-                elif a == 8:
-                    hhh += 1000
-                height["value"] = hhh
-            self.data["geopotential"] = { "surface": surface, "height": height, "raw": group }
-    def parsePressureTendency(self, group): # 5appp
-        """
-        Parses the pressure tendency group (5appp)
-        """
-        if not self._isGroupValid(group):
-            raise pymetdecoder.DecodeError("{} is an invalid pressure tendency group".format(group))
-
-        # Create the data array
-        data = { "available": True, "raw": group, "unit": "hPa" }
-        if group[1:5] == "////":
-            data["available"] = False
-        else:
-            a, description = ct.codeTable0200(int(group[1:2]))
-            ppp = group[2:5]
-            if ppp == "///":
-                data["available"] = False
-            else:
-                data["tendency"] = a
-                data["change"]   = "{:.1f}".format(ppp / (10.0 if a < 5 else -10.0))
-        self.data["pressureTendency"] = data
-        #
-        # foo = pymetdecoder.Observation("12345", "m")
-        # print(foo)
+            self.data["geopotential"] = section1.Geopotential(group)
 
     def _isGroupValid(self, group, length=5, allowSlashes=True, multipleGroups=False):
         """

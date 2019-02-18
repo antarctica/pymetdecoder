@@ -19,8 +19,6 @@ class StationType(pymetdecoder.Observation):
 
     * MMMM - station type
     """
-    def __init__(self, raw):
-        pymetdecoder.Observation.__init__(self, raw, availability=False)
     def setValue(self):
         # Set the value
         if re.match("^(AA|BB|OO)XX$", self.raw):
@@ -34,8 +32,6 @@ class Callsign(pymetdecoder.Observation):
     * D...D - Ship's callsign consisting of three or more alphanumeric characters
     * A1bwnnn - WMO regional association area
     """
-    def __init__(self, raw):
-        pymetdecoder.Observation.__init__(self, raw, availability=False)
     def setValue(self):
         # Set the values
         if re.match("^(1[1-7]|2[1-6]|3[1-4]|4[1-8]|5[1-6]|6[1-6]|7[1-4])\d{3}$", self.raw):
@@ -51,8 +47,6 @@ class ObservationTime(pymetdecoder.Observation):
 
     * YYGG - day and hour of observation
     """
-    def __init__(self, raw):
-        pymetdecoder.Observation.__init__(self, raw, availability=False)
     def setValue(self):
         # Get the values
         YY = self.raw[0:2]
@@ -73,8 +67,6 @@ class WindIndicator(pymetdecoder.Observation):
 
     * iw - Indicator for source and units of wind speed
     """
-    def __init__(self, raw):
-        pymetdecoder.Observation.__init__(self, raw)
     def setValue(self):
         # Check indicator is valid
         if not re.match("[0134/]$", self.raw):
@@ -91,8 +83,6 @@ class StationPosition(pymetdecoder.Observation):
     * 99LaLaLa QcLoLoLoLo - Latitude, globe quadrant and longitude
     * MMMULaULo h0h0h0h0im - Mobile land station position
     """
-    def __init__(self, raw):
-        pymetdecoder.Observation.__init__(self, raw)
     def setValue(self):
         # Check we have a valid number of raw groups
         if len(self.raw.split()) not in [2, 4]:
@@ -114,6 +104,10 @@ class StationPosition(pymetdecoder.Observation):
             im       = int(self.raw[22:23]) # Elevation indicator/confidence
             if (not 1 <= MMM <= 623) and (not 901 <= MMM <= 936):
                 raise pymetdecoder.DecodeError("{} is not a valid Marsden Square".format(MMM))
+            if str(LaLaLa)[-2] != str(ULa):
+                raise pymetdecoder.DecodeError("Latitude unit digit does not match expected value ({} != {})".format(str(LaLaLa)[-2], ULa))
+            if str(LoLoLoLo)[-2] != str(ULo):
+                raise pymetdecoder.DecodeError("Longitude unit digit does not match expected value ({} != {})".format(str(LoLoLoLo)[-2], ULo))
 
             confidence = ["Poor", "Excellent", "Good", "Fair"]
             self.marsdenSquare = MMM
