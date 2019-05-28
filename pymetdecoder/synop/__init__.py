@@ -12,20 +12,14 @@ import re
 import pymetdecoder
 from . import section0
 from . import section1
+from . import section2
 ################################################################################
 # REPORT CLASSES
 ################################################################################
 class SYNOP(pymetdecoder.Report):
-    def __init__(self, message):
-        """
-        Initialises the SYNOP report object
-        """
-        pymetdecoder.Report.__init__(self, message)
-
-    # Decode the SYNOP
     def decode(self):
         """
-        Decodes the SYNOP
+        Decodes the SYNOP and sets the data attribute with the information
         """
         # Initialise data attribute
         self.data = {}
@@ -48,7 +42,7 @@ class SYNOP(pymetdecoder.Report):
             # Now add the station ID if it is an AAXX station. Otherwise, add the current position
             if self.data["stationType"].value == "AAXX":
                 group = next(groups)
-                if not _isGroupValid(group, allowSlashes=False):
+                if not self._isGroupValid(group, allowSlashes=False):
                     raise pymetdecoder.DecodeError("{} is an invalid IIiii group".format(group))
                 self.data["stationID"] = pymetdecoder.Observation(group, availability=False, value=group)
             elif self.data["stationType"].value == "BBXX":
@@ -86,17 +80,13 @@ class SYNOP(pymetdecoder.Report):
                     break
                 if header == i:
                     if i == 1: # Air temperature
-                        if "temperature" not in self.data:
-                            self.data["temperature"] = {}
-                        self.data["temperature"]["air"] = section1.Temperature(next_group, "Cel")
+                        self.data["airTemperature"] = section1.Temperature(next_group, "Cel")
                     elif i == 2: # Dewpoint or relative humidity
                         sn = next_group[1:2]
                         if sn == "9":
                             self.data["relativeHumidity"] = section1.RelativeHumidity(next_group, "%")
                         else:
-                            if "temperature" not in self.data:
-                                self.data["temperature"] = {}
-                            self.data["temperature"]["dewpoint"] = section1.Temperature(next_group, "Cel")
+                            self.data["dewpointTemperature"] = section1.Temperature(next_group, "Cel")
                     elif i == 3: # Station pressure
                         if not self._isGroupValid(next_group):
                             raise pymetdecoder.DecodeError("{} is an invalid station level pressure group".format(next_group))
@@ -145,13 +135,117 @@ class SYNOP(pymetdecoder.Report):
                         # Create the data array
                         self.data["exactObsTime"] = section1.ExactObservationTime(next_group)
                     next_group = next(groups)
+
+            ### SECTION 2 ###
+            if next_group[0:3] == "222":
+                self.data["displacement"] = section2.ShipDisplacement(next_group)
+                next_group = next(groups)
+
+                # Parse the next group, based on the group header
+                for i in range(0, 9):
+                    try:
+                        header = int(next_group[0:1])
+                    except ValueError as e:
+                        raise pymetdecoder.DecodeError("{} is not a valid section 1 group header".format(header))
+                        break
+                    if header == i:
+                        if i == 0: # Sea surface temperature
+                            if not self._isGroupValid(next_group):
+                                raise pymetdecoder.DecodeError("{} is an invalid sea surface temperature group".format(next_group))
+                            self.data["seaSurfaceTemperature"] = section2.SeaSurfaceTemperature(next_group)
+                        if i == 1: # Period and height of waves (instrumental)
+                            if not self._isGroupValid(next_group):
+                                raise pymetdecoder.DecodeError("{} is an invalid instrumental wave group".format(next_group))
+                            if "waves" not in self.data:
+                                self.data["waves"] = {}
+                            if "wind" not in self.data["waves"]:
+                                self.data["waves"]["wind"] = []
+                            self.data["waves"]["wind"].append(section2.WindWaves(next_group, instrumental=True))
+                        if i == 2: # Period and height of wind waves
+                            if not self._isGroupValid(next_group):
+                                raise pymetdecoder.DecodeError("{} is an invalid wind wave group".format(next_group))
+                            if "waves" not in self.data:
+                                self.data["waves"] = {}
+                            if "wind" not in self.data["waves"]:
+                                self.data["waves"]["wind"] = []
+                            self.data["waves"]["wind"].append(section2.WindWaves(next_group, instrumental=False))
+                        if i == 3: # Swell wave directions
+                            if not self._isGroupValid(next_group):
+                                raise pymetdecoder.DecodeError("{} is an invalid swell wave direction group".format(next_group))
+                            swData = [next_group]
+                            swGroups = [4]
+                            # if next_group[1:3] != "//":
+                            #     swGroups.append(4) # We are expecting group 4 data
+                            if next_group[3:5] != "//":
+                                swGroups.append(5) # We are expecting group 5 data
+                        if i == 4 or i == 5: # Swell wave period and height
+                            if not self._isGroupValid(next_group):
+                                raise pymetdecoder.DecodeError("{} is an invalid swell wave group".format(next_group))
+                            try:
+                                swGroups
+                            except NameError as e:
+                                swGroups = []
+
+                            swData.append(next_group)
+                            if len(swData) == len(swGroups) + 1:
+                                if "waves" not in self.data:
+                                    self.data["waves"] = {}
+                                self.data["waves"]["swell"] = section2.SwellWaves(" ".join(swData))
+                        if i == 6: # Ice accretion
+                            if not self._isGroupValid(next_group):
+                                raise pymetdecoder.DecodeError("{} is an invalid ice accretion group".format(next_group))
+                            self.data["iceAccretion"] = section2.IceAccretion(next_group)
+                        if i == 7: # Accurate wave heights
+                            if not self._isGroupValid(next_group):
+                                raise pymetdecoder.DecodeError("{} is an invalid wave height group".format(next_group))
+                            self.data["waves"]["wind"].append(section2.WindWaves(next_group, instrumental=True))
+                        if i == 8: # Wet bulb temperature
+                            if not self._isGroupValid(next_group):
+                                raise pymetdecoder.DecodeError("{} is an invalid wet bulb temperature group".format(next_group))
+                            self.data["wetBulbTemperature"] = section2.WetBulbTemperature(next_group, "Cel")
+                        next_group = next(groups)
+
+            # ICE groups
+            iceGroups = []
+            if next_group == "ICE":
+                while next_group[0:3] != "333":
+                    iceGroups.append(next_group)
+                    next_group = next(groups)
+            self.data["seaLandIce"] = section2.SeaLandIce(iceGroups)
+
+            ### SECTION 3 ###
+            if next_group[0:3] == "333":
+                print("doing section 3")
+                pass
+
+
+            # Determine next section
+            # print(next_group[0:3])
+            # if next_group[0:3] == "222":
+            #     ### SECTION 2 ###
+            #     print("do section 2 stuff")
+            # elif next_group[0:3] == "333":
+            #     # do section 3 stuff
+            #     print("do section 3 stuff")
+            # else:
+            #     raise pymetdecoder.DecodeError("I'm not sure what to do with {}".format(next_group))
+
         except StopIteration:
+            # If we have reached this point with iceGroups still intact, parse them
+            try:
+                self.data["seaLandIce"] = section2.SeaLandIce(iceGroups)
+            except UnboundLocalError as e:
+                pass
             return
 
     # Functions to decode individual groups
     def parseYYGGi(self, group): # YYGGi
         """
-        Parses the observation time and wind indicator group (YYGGi)
+        Parses the observation time and wind indicator group (YYGGi) and sets
+        the obsTime and windIndicator data values
+
+        :param string group: SYNOP code to decode
+        :raises: pymetdecoder.DecodeError if groups is not a valid YYGGi group
         """
         # Check group matches regular expression
         if not self._isGroupValid(group):
@@ -165,6 +259,11 @@ class SYNOP(pymetdecoder.Report):
     def parseiihVV(self, group): # iihVV
         """
         Parses the precipitation and weather indicator and cloud base group (iihVV)
+        and sets the precipitationIndicator, weatherIndicator and lowestCloudBase
+        data values
+
+        :param string group: SYNOP code to decode
+        :raises: pymetdecoder.DecodeError if groups is not a valid iihVV group
         """
         # Check group matches regular expression
         if not self._isGroupValid(group):
@@ -183,7 +282,11 @@ class SYNOP(pymetdecoder.Report):
         self.data["visibility"] = section1.Visibility(group[3:5], unit="m")
     def parseNddff(self, group): # Nddff
         """
-        Parses the cloud cover and surface wind group (Nddff)
+        Parses the cloud cover and surface wind group (Nddff) and sets the cloudCover
+        and surfaceWind data values
+
+        :param string group: SYNOP code to decode
+        :raises: pymetdecoder.DecodeError if groups is not a valid Nddff group
         """
         if not self._isGroupValid(group):
             raise pymetdecoder.DecodeError("{} is an invalid Nddff group".format(group))
@@ -195,10 +298,13 @@ class SYNOP(pymetdecoder.Report):
         self.data["surfaceWind"] = section1.SurfaceWind(group[1:5])
         if hasattr(self.data["surfaceWind"], "speed") and hasattr(self.data["windIndicator"], "unit"):
             self.data["surfaceWind"].speed.setUnit(self.data["windIndicator"].unit)
-
     def parseAirTemperature(self, group): # 1snTTT
         """
-        Parses the air temperature group (1snTTT)
+        Parses the air temperature group (1snTTT) and sets the air temperature
+        data value
+
+        :param string group: SYNOP code to decode
+        :raises: pymetdecoder.DecodeError if groups is not a valid 1snTTT group
         """
         if not self._isGroupValid(group):
             raise pymetdecoder.DecodeError("{} is an invalid air temperature group".format(group))
@@ -207,11 +313,13 @@ class SYNOP(pymetdecoder.Report):
         if "temperature" not in self.data:
             self.data["temperature"] = {}
         self.data["temperature"]["air"] = section1.Temperature(group, "Cel")
-
-        # self._parseTemperature(group, sn, TTT, "air")
     def parseDewpointHumidity(self, group): # 2snTTT or 29UUU
         """
         Parses the dewpoint temperature/relative humidity group (2snTTT or 29UUU)
+        and sets the relativeHumidity and/or dewpoint temperature data values
+
+        :param string group: SYNOP code to decode
+        :raises: pymetdecoder.DecodeError if groups is not a valid dewpoint temperature/relative humidity group
         """
         if not self._isGroupValid(group):
             raise pymetdecoder.DecodeError("{} is an invalid dewpoint temperature/relative humidity group".format(group))
@@ -234,10 +342,16 @@ class SYNOP(pymetdecoder.Report):
                 data["value"] = TTT
             self.data["relativeHumidity"] = data
         else:
-            self._parseTemperature(group, sn, TTT, "dewpoint")
+            if "temperature" not in self.data:
+                self.data["temperature"] = {}
+            self.data["temperature"]["dewpoint"] = section1.Temperature(group, "Cel")
     def parseSeaLevelPressureGeopotential(self, group): # 4PPPP or 4ahhh
         """
-        Parses the sea level pressure/geopotential group (4PPPP or 4ahhh)
+        Parses the sea level pressure/geopotential group (4PPPP or 4ahhh) and sets
+        the seaLevelPressure and/or geopotential data values
+
+        :param string group: SYNOP code to decode
+        :raises: pymetdecoder.DecodeError if groups is not a valid sea level pressure/geopotential group
         """
         if not self._isGroupValid(group):
             raise pymetdecoder.DecodeError("{} is an invalid sea level pressure/geopotential group".format(group))
@@ -248,11 +362,17 @@ class SYNOP(pymetdecoder.Report):
             self.data["seaLevelPressure"] = section1.Pressure(group, "hPa")
         elif a in ["1", "2", "5", "7", "8", "/"]:
             self.data["geopotential"] = section1.Geopotential(group)
-
     def _isGroupValid(self, group, length=5, allowSlashes=True, multipleGroups=False):
         """
-        Checks if group is valid.
-        In most cases, a valid group is 5 alphanumeric characters and/or slashes (/)
+        Internal function to check if group is valid. In most cases, a valid group
+        is 5 alphanumeric characters and/or slashes
+
+        :param string group: SYNOP code to decode
+        :param int length: Desired length of group
+        :param boolean allowSlashes: Slashes (/) are allowed in this group
+        :param boolean multipleGroups: Check for multiple groups
+        :returns: True if group contains all valid characters and is correct length, False otherwise
+        :rtype: boolean
         """
         regexp_parts = ["\d"]
         if allowSlashes:
@@ -261,70 +381,3 @@ class SYNOP(pymetdecoder.Report):
             regexp_parts.append(" ")
         regexp = "[{}]{{{}}}".format("".join(regexp_parts), length)
         return bool(re.match(regexp, group))
-    def _parseTemperature(self, group, sign, temperature, type):
-        """
-        Parses a temperature group
-        """
-        # Prepare the data
-        data = { "available": True, "raw": group }
-        if sign == "/" or temperature == "///":
-            data["available"] = False
-        else:
-            if temperature[2] == "/":
-                temperature = temperature[0:2] + "0"
-            sign = int(sign)
-            temperature = int(temperature)
-            # Check sign is valid
-            if sign not in [0, 1]:
-                raise pymetdecoder.DecodeError("{} is not a valid temperature sign code for code table 3845".format(sign))
-
-            # Add data
-            data["unit"]  = "Cel"
-            data["value"] = (temperature / 10.0) * (1 if sign == 0 else -1)
-        if "temperature" not in self.data:
-            self.data["temperature"] = {}
-        self.data["temperature"][type] = data
-
-        foo = Temperature(group, "Cel")
-        print(foo)
-    def _parsePressure(self, group, type):
-        """
-        Parses a pressure group
-        """
-
-        # Create the data array
-        PPPP = group[1:5]
-        data = { "available": True, "raw": group, "unit": "hPa" }
-        if PPPP[1:4] == "///":
-            data["available"] = False
-        else:
-            data["value"] = (int(PPPP) / 10) + (0 if int(PPPP) > 500 else 1000)
-        self.data[type] = data
-################################################################################
-# FUNCTIONS
-################################################################################
-def _isGroupValid(group, length=5, allowSlashes=True, multipleGroups=False):
-    """
-    Checks if group is valid.
-    In most cases, a valid group is 5 alphanumeric characters and/or slashes (/)
-    """
-    regexp_parts = ["\d"]
-    if allowSlashes:
-        regexp_parts.append("\/")
-    if multipleGroups:
-        regexp_parts.append(" ")
-    regexp = "^[{}]{{{}}}$".format("".join(regexp_parts), length)
-    return bool(re.match(regexp, group))
-# def createDataArray(availability=True, raw=None, value=None, unit=None, values=None):
-#     """Creates a data array from the given values"""
-#     # Initialise the data array
-#     data = {}
-#     if availability: data["available"] = True
-#     if raw is not None:   data["raw"]   = raw
-#     if value is not None: data["value"] = value
-#     if unit is not None:  data["unit"]  = unit
-#     if values is not None:
-#         for v in values: data[v] = values[v]
-    #
-    # # Return the data
-    # return data

@@ -14,12 +14,13 @@ import pymetdecoder, re
 ################################################################################
 def codeTable0161(A1):
     """
-    Code table 0161
-    A1: WMO Regional Association area in which buoy, drilling rig or oil- or gas-
-        production platform has been deployed
+    WMO Regional Association area in which buoy, drilling rig or oil- or gas-production
+    platform has been deployed
 
-    Returns:
-        A1 (str) Region identifier (I, II etc)
+    :param string A1: A1
+    :returns: Region identifier (I, II etc)
+    :rtype: string
+    :raises: pymetdecoder.DecodeError if A1 is invalid
     """
     # Set region list
     regions = [None, "I", "II", "III", "IV", "V", "VI", "Antarctic"]
@@ -29,16 +30,15 @@ def codeTable0161(A1):
         return regions[int(A1[0:1])]
     else:
         raise pymetdecoder.DecodeError("{} is not a valid code for code table 0161".format(A1))
-
 def codeTable0200(a):
     """
-    Code table 0200
-    a: Characteristic of pressure tendency during the three hours preceding the time
-       of observation
+    Characteristic of pressure tendency during the three hours preceding the time
+    of observation
 
-    Returns:
-        a (int) Code value
-        description (str) Description of code value
+    :param int a: a
+    :returns: Description of code value
+    :rtype: string
+    :raises: pymetdecoder.DecodeError if a is invalid
     """
     descriptions = [
         "Increasing, then decreasing; atmospheric pressure the same or higher than three hours ago",
@@ -52,34 +52,115 @@ def codeTable0200(a):
         "Steady or increasing, then decreasing; or decreasing, then decreasing more rapidly",
     ]
     try:
-        description = descriptions[a]
-        return (a, description)
+        return descriptions[a]
     except KeyError as e:
         raise pymetdecoder.DecodeError("{} is not a valid code for code table 0200".format(a))
-
 def codeTable0264(a):
     """
-    Code table 0264
-    a3: Standard isobaric surface for which the geopotential is reported
+    Standard isobaric surface for which the geopotential is reported
 
-    Returns:
-        surface (int) in hPa
+    :param int a3: a3
+    :returns: Geopotential surface in hPa
+    :rtype: int
+    :raises: pymetdecoder.DecodeError if a3 is invalid
     """
     surfaces = [None, 1000, 925, None, None, 500, None, 700, 850]
     if surfaces[a] is None:
-        raise pymetdecoder.DecodeError("{} is not a valid code for code table 0264".format(dd))
+        raise pymetdecoder.DecodeError("{} is not a valid code for code table 0264".format(a))
     else:
         return surfaces[a]
+def codeTable0439(bi):
+    """
+    Ice of land origin
 
+    :param string bi: bi
+    :returns: Description of ice of land origin
+    :rtype: string
+    :raises: pymetdecoder.DecodeError if bi is invalid
+    """
+    descriptions = [
+        "No ice of land origin",
+        "1-5 icebergs, no growlers or bergy bits",
+        "6-10 icebergs, no growlers or bergy bits",
+        "11-20 icebergs, no growlers or bergy bits",
+        "Up to and including 10 growlers - no icebergs",
+        "More than 10 growlers and bergy bits - no icebergs",
+        "1-5 icebergs, with growlers and bergy bits",
+        "6-10 icebergs, with growlers and bergy bits",
+        "11-20 icebergs, with growlers and bergy bits",
+        "More than 20 icebergs, with growlers and bergy bits - a major hazard to navigation"
+    ]
+    try:
+        if bi == "/":
+            return "Unable to report, because of darkness, lack of visibility or because only sea ice is visible"
+        else:
+            return descriptions[int(bi)]
+    except KeyError as e:
+        raise pymetdecoder.DecodeError("{} is not a valid code for code table 0439".format(bi))
+def codeTable0639(ci):
+    """
+    Concentration or arrangement of sea ice
+
+    :param string bi: ci
+    :returns: Description of concentration or arrangement of sea ice
+    :rtype: string
+    :raises: pymetdecoder.DecodeError if ci is invalid
+    """
+    pass
+    # descriptions = [
+    #     "No sea ice in sight",
+    #     "Ship in open lead more than 1.0 nautical",
+    #     "6-10 icebergs, no growlers or bergy bits",
+    #     "11-20 icebergs, no growlers or bergy bits",
+    #     "Up to and including 10 growlers - no icebergs",
+    #     "More than 10 growlers and bergy bits - no icebergs",
+    #     "1-5 icebergs, with growlers and bergy bits",
+    #     "6-10 icebergs, with growlers and bergy bits",
+    #     "11-20 icebergs, with growlers and bergy bits",
+    #     "More than 20 icebergs, with growlers and bergy bits - a major hazard to navigation"
+    # ]
+    # try:
+    #     if bi == "/":
+    #         return "Unable to report, because of darkness, lack of visibility or because only sea ice is visible"
+    #     else:
+    #         return descriptions[int(bi)]
+    # except KeyError as e:
+        # raise pymetdecoder.DecodeError("{} is not a valid code for code table 0439".format(bi))
+def codeTable0700(D):
+    """
+    Direction or bearing in one figure
+
+    :param string D: D
+    :returns: Direction
+    :rtype: string
+    :returns: True if wind is calm or vessel is stationary, False otherwise (D = 0)
+    :rtype: boolean
+    :returns: True if direction is all directions, confused, variable or unknown, False otherwise (D = 9)
+    :rtype: boolean
+    """
+    if D == "/":
+        return (None, None, None)
+    directions = ["", "NE", "E", "SE", "S", "SW", "W", "NW", "N", None]
+    isCalmOrStationary = False
+    allDirections = False
+    if int(D) == 0:
+        isCalmOrStationary = True
+    elif int(D) == 9:
+        allDirections = True
+    direction = directions[int(D)]
+    return (direction, isCalmOrStationary, allDirections)
 def codeTable0877(dd):
     """
-    Code table 0877
-    dd: True direction, in tens of degrees, from which wind is blowing
+    True direction, in tens of degrees, from which wind is blowing
 
-    Returns:
-        direction (int) in degrees
-        calm (boolean) if wind is calm
-        varAllUnknown (boolean) if wind direction is variable, from all directions or unknown
+    :param int dd: dd
+    :returns: Direction of wind in degrees
+    :rtype: int
+    :returns: True if wind is calm, False otherwise (dd = 00)
+    :rtype: boolean
+    :returns: True if wind direction is variable, from all directions or unknown, False otherwise
+    :rtype: boolean
+    :raises: pymetdecoder.DecodeError if dd is invalid
     """
     calm = False
     varAllUnknown = False
@@ -95,15 +176,18 @@ def codeTable0877(dd):
 
     # Return the values
     return (direction, calm, varAllUnknown)
-
 def codeTable1600(h):
     """
-    Code table 1600
-    h: Height above surface of the base of the lowest cloud
+    Height above surface of the base of the lowest cloud
 
-    Returns:
-        lower bound of range (int) in metres
-        upper bound of range (int) in metres
+    :param int h: h
+    :returns: Lower bound of range in metres
+    :rtype: int
+    :returns: Upper bound of range in metres
+    :rtype: int
+    :returns: Quantifier (isGreaterOrEqual if h == 9)
+    :rtype: string or None
+    :raises: pymetdecoder.DecodeError if h is invalid
     """
     base = [0, 50, 100, 200, 300, 600, 1000, 1500, 2000, 2500, None]
     try:
@@ -116,16 +200,59 @@ def codeTable1600(h):
         return (min, max, quantifier)
     except KeyError as e:
         raise pymetdecoder.DecodeError("{} is not a valid code for code table 1600".format(h))
+def codeTable1751(Is):
+    """
+    Ice accretion on ships
 
+    :param string Is: Is
+    :returns: Ice accretion description
+    :rtype: string
+    :raises: pymetdecoder.DecodeError if Is is invalid
+    """
+    accretions = [
+        "",
+        "Icing from ocean spray",
+        "Icing from fog",
+        "Icing from spray and fog",
+        "Icing from rain",
+        "Icing from spray and rain"
+    ]
+    try:
+        return accretions[int(Is)]
+    except KeyError as e:
+        raise pymetdecoder.DecodeError("{} is not a valid code for code table 1751".format(Is))
+def codeTable3551(Rs):
+    """
+    Rate of ice accretion on ships
+
+    :param string Rs: Rs
+    :returns: Ice accretion rate
+    :rtype: string
+    :raises: pymetdecoder.DecodeError if Rs is invalid
+    """
+    rates = [
+        "Ice not building up",
+        "Ice building up slowly",
+        "Ice building up rapidly",
+        "Ice melting or breaking up slowly",
+        "Ice melting or breaking up rapidly"
+    ]
+    try:
+        return rates[int(Rs)]
+    except KeyError as e:
+        raise pymetdecoder.DecodeError("{} is not a valid code for code table 3551".format(Rs))
 def codeTable3590(RRR):
     """
-    Code table 3590
-    RRR: Amount of precipitation which has fallen during the reporting period
+    Amount of precipitation which has fallen during the reporting period
 
-    Returns:
-        precipitation (int) in mm
-        quantifier (str or None) (where required)
-        trace (boolean)
+    :param int RRR: RRR
+    :returns: Precipitation in mm
+    :rtype: int
+    :returns: Quantifier (isGreaterOrEqual if RRR == 989)
+    :rtype: string or None
+    :returns: True if precipitation amount measured is trace, False otherwise
+    :rtype: boolean
+    :raises: pymetdecoder.DecodeError if RRR is invalid
     """
     if RRR <= 988:
         return (RRR, None, False)
@@ -137,29 +264,66 @@ def codeTable3590(RRR):
         return ((RRR - 990) / 10.0, None, False)
     else:
         raise pymetdecoder.DecodeError("{} is not a valid precipitation code for code table 3590".format(RRR))
+def codeTable3850(ss):
+    """
+    Indicator for sign and type of measurement of sea surface temperature
 
+    :param string ss: ss
+    :returns: Type of measurement of the sea surface temperature
+    :rtype: string
+    :returns: Sign of the sea surface temperature (1 if positive, -1 if negative)
+    :rtype: int
+    """
+    if ss == "/":
+        return (None, 1)
+    methodList = ["Intake", "Bucket", "Hull contact sensor", "Other"]
+    method = methodList[int(ss) >> 1]
+    sign   = 1 if int(ss) % 2 == 0 else -1
+
+    return (method, sign)
+def codeTable3855(sw):
+    """
+    Indicator for sign and type of measurement of wet bulb temperature
+
+    :param string sw: sw
+    :returns: Type of measurement of the wet bulb temperature
+    :rtype: string
+    :returns: Sign of the wet bulb temperature (1 if positive, -1 if negative)
+    :rtype: int
+    """
+    if sw == "/":
+        return (None, 1)
+    methodList = ["Measured", "Measured", "Measured", None, None, "Computed", "Computed", "Computed"]
+    try:
+        method = methodList[int(sw)]
+        sign   = 1 if int(sw) in [0, 5] else -1
+        return (method, sign)
+    except KeyError as e:
+        raise pymetdecoder.DecodeError("{} is not a valid code for code table 3855".format(Rs))
 def codeTable4019(t):
     """
-    Code table 4019
-    t: Duration of period of reference for amount of precipitation, ending at the time of the report
+    Duration of period of reference for amount of precipitation, ending at the time of the report
 
-    Returns:
-        time (int) in hours
+    :param int t: t
+    :returns: Time in hours
+    :rtype: int
+    :raises: pymetdecoder.DecodeError if t is invalid
     """
     hours = [None, 6, 12, 18, 24, 1, 2, 3, 9, 15]
     try:
         return hours[t]
     except KeyError as e:
         raise pymetdecoder.DecodeError("{} is not a valid code for code table 4019".format(h))
-
 def codeTable4377(VV):
     """
-    Code table 4377
-    VV: Horizontal visibility at surface
+    Horizontal visibility at surface
 
-    Returns:
-        visibility (int) in metres
-        quantifier (str or None) (where required)
+    :param int VV: VV
+    :returns: Visibility in metres
+    :rtype: int
+    :returns: Quantifier (isLess, isGreater, isGreaterOrEqual)
+    :rtype: string or None
+    :raises: pymetdecoder.DecodeError if VV is invalid
     """
     visibility = None
     quantifier = None
@@ -193,3 +357,28 @@ def codeTable4377(VV):
 
     # Return the values
     return (visibility, quantifier)
+def codeTable4451(vs):
+    """
+    Ship's average speed made good during the three hours preceding the time of observation
+
+    :param string vs: vs
+    :returns: Minimum, maximum and quantifier of speed in knots
+    :rtype: tuple (int, int, string or None)
+    :returns: Minimum, maximum and quantifier of speed in km/h
+    :rtype: tuple (int, int, string or None)
+    """
+    if vs == "/":
+        return (None, None, None)
+    vs = int(vs)
+    if vs == 0:
+        speedKT  = (0, 0, None)
+        speedKMH = (0, 0, None)
+    elif vs == 9:
+        speedKT  = (40, None, "isGreaterThan")
+        speedKMH = (75, None, "isGreaterThan")
+    else:
+        kmhRange = [0, 1, 11, 20, 29, 38, 48, 57, 66, 75]
+        speedKT  = ((5 * vs) - 4, (5 * vs), None)
+        speedKMH = (kmhRange[vs], kmhRange[vs + 1] - 1, None)
+
+    return (speedKT, speedKMH)
