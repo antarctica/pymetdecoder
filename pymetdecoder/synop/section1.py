@@ -202,9 +202,9 @@ class PressureTendency(pymetdecoder.Observation):
             if not self.isAvailable(value=a) or not self.isAvailable(value=ppp):
                 self.available = False
             else:
-                description = ct.codeTable0200(int(a))
-                self.tendency = int(a)
-                self.change   = float("{:.1f}".format(int(ppp) / (10.0 if int(a) < 5 else -10.0)))
+                tendency = ct.codeTable0200(a)
+                self.tendency = tendency
+                self.change   = float("{:.1f}".format(int(ppp) / (10.0 if int(tendency) < 5 else -10.0)))
 class Precipitation(pymetdecoder.Observation):
     """
     Precipitation

@@ -10,6 +10,35 @@
 ################################################################################
 import pymetdecoder, re
 ################################################################################
+# FUNCTIONS
+################################################################################
+def _checkRange(x, table, min=0, max=0, nullChar="/"):
+    """
+    Private function to check if a given value is in the allowed range for the
+    code table
+
+    :param string x: Value to check
+    :param string table: Code table
+    :param int min: Minimum value
+    :param int max: Maximum value
+    :param string nullChar: Character representing a null value (default "/")
+    :returns: Integer value of x or x as string if not available
+    :rtype: int or string
+    :raises: pymetdecoder.DecodeError if x is invalid
+    """
+    try:
+        # If it's a null value, return the value
+        # If it's within the range, return the value as an integer
+        # Otherwise, raise an exception
+        if x.count(nullChar) == len(x):
+            return x
+        elif min <= int(x) <= max:
+            return int(x)
+        else:
+            raise pymetdecoder.DecodeError("{} is not a valid code for code table {}".format(x, table))
+    except Exception as e:
+        raise pymetdecoder.DecodeError("{} is not a valid code for code table {}".format(x, table))
+################################################################################
 # MAIN BODY
 ################################################################################
 def codeTable0161(A1):
@@ -35,27 +64,13 @@ def codeTable0200(a):
     Characteristic of pressure tendency during the three hours preceding the time
     of observation
 
-    :param int a: a
-    :returns: Description of code value
-    :rtype: string
-    :raises: pymetdecoder.DecodeError if a is invalid
+    :param string a: a
+    :returns: Integer value of a
+    :rtype: int
+    :raises: pymetdecoder.DecodeError if a is invalid or out of range
     """
-    descriptions = [
-        "Increasing, then decreasing; atmospheric pressure the same or higher than three hours ago",
-        "Increasing, then steady; or increasing, then increasing more slowly",
-        "Increasing (steadily or unsteadily)",
-        "Decreasing or steady, then increasing; or increasing, then increasing more rapidly",
-        "Steady; atmospheric pressure the same as three hours ago",
-        "Decreasing, then increasing; atmospheric pressure the same or higher than three hours ago",
-        "Decreasing, then steady; or decreasing, then decreasing more slowly",
-        "Decreasing (steadily or unsteadily)",
-        "Steady or increasing, then decreasing; or decreasing, then decreasing more rapidly",
-    ]
-    try:
-        return descriptions[a]
-    except KeyError as e:
-        raise pymetdecoder.DecodeError("{} is not a valid code for code table 0200".format(a))
-def codeTable0264(a):
+    return _checkRange(a, "0200", max=8)
+def codeTable0264(a3):
     """
     Standard isobaric surface for which the geopotential is reported
 
@@ -65,8 +80,8 @@ def codeTable0264(a):
     :raises: pymetdecoder.DecodeError if a3 is invalid
     """
     surfaces = [None, 1000, 925, None, None, 500, None, 700, 850]
-    if surfaces[a] is None:
-        raise pymetdecoder.DecodeError("{} is not a valid code for code table 0264".format(a))
+    if surfaces[a3] is None:
+        raise pymetdecoder.DecodeError("{} is not a valid code for code table 0264".format(a3))
     else:
         return surfaces[a]
 def codeTable0439(bi):
@@ -74,58 +89,21 @@ def codeTable0439(bi):
     Ice of land origin
 
     :param string bi: bi
-    :returns: Description of ice of land origin
-    :rtype: string
+    :returns: Integer value of bi or / if not available
+    :rtype: int or string
     :raises: pymetdecoder.DecodeError if bi is invalid
     """
-    descriptions = [
-        "No ice of land origin",
-        "1-5 icebergs, no growlers or bergy bits",
-        "6-10 icebergs, no growlers or bergy bits",
-        "11-20 icebergs, no growlers or bergy bits",
-        "Up to and including 10 growlers - no icebergs",
-        "More than 10 growlers and bergy bits - no icebergs",
-        "1-5 icebergs, with growlers and bergy bits",
-        "6-10 icebergs, with growlers and bergy bits",
-        "11-20 icebergs, with growlers and bergy bits",
-        "More than 20 icebergs, with growlers and bergy bits - a major hazard to navigation"
-    ]
-    try:
-        if bi == "/":
-            return "Unable to report, because of darkness, lack of visibility or because only sea ice is visible"
-        else:
-            return descriptions[int(bi)]
-    except KeyError as e:
-        raise pymetdecoder.DecodeError("{} is not a valid code for code table 0439".format(bi))
+    return _checkRange(bi, "0439", max=9)
 def codeTable0639(ci):
     """
     Concentration or arrangement of sea ice
 
-    :param string bi: ci
-    :returns: Description of concentration or arrangement of sea ice
+    :param string ci: ci
+    :returns:  Integer value of ci or / if not available
     :rtype: string
     :raises: pymetdecoder.DecodeError if ci is invalid
     """
-    pass
-    # descriptions = [
-    #     "No sea ice in sight",
-    #     "Ship in open lead more than 1.0 nautical",
-    #     "6-10 icebergs, no growlers or bergy bits",
-    #     "11-20 icebergs, no growlers or bergy bits",
-    #     "Up to and including 10 growlers - no icebergs",
-    #     "More than 10 growlers and bergy bits - no icebergs",
-    #     "1-5 icebergs, with growlers and bergy bits",
-    #     "6-10 icebergs, with growlers and bergy bits",
-    #     "11-20 icebergs, with growlers and bergy bits",
-    #     "More than 20 icebergs, with growlers and bergy bits - a major hazard to navigation"
-    # ]
-    # try:
-    #     if bi == "/":
-    #         return "Unable to report, because of darkness, lack of visibility or because only sea ice is visible"
-    #     else:
-    #         return descriptions[int(bi)]
-    # except KeyError as e:
-        # raise pymetdecoder.DecodeError("{} is not a valid code for code table 0439".format(bi))
+    return _checkRange(ci, "0639", max=9)
 def codeTable0700(D):
     """
     Direction or bearing in one figure
@@ -149,6 +127,29 @@ def codeTable0700(D):
         allDirections = True
     direction = directions[int(D)]
     return (direction, isCalmOrStationary, allDirections)
+def codeTable0739(Di):
+    """
+    True bearing of principle ice edge
+
+    :param string Di: Di
+    :returns: Direction
+    :rtype: string
+    :returns: True if ship is in shore, False otherwise (Di == 0)
+    :rtype: boolean
+    :returns: True if ship is in ice, False otherwise (Di == 9)
+    :rtype: boolean
+    """
+    try:
+        if Di == "/":
+            return (None, None, None)
+        directions = [None, "NE", "E", "SE", "S", "SW", "W", "NW", "N", None]
+        shipInShore = True if int(Di) == 0 else False
+        shipInIce   = True if int(Di) == 9 else False
+        direction   = directions[int(Di)]
+
+        return (direction, shipInShore, shipInIce)
+    except Exception as e:
+        raise pymetdecoder.DecodeError("{} is not a valid value for code table 0739".format(Di))
 def codeTable0877(dd):
     """
     True direction, in tens of degrees, from which wind is blowing
@@ -205,42 +206,21 @@ def codeTable1751(Is):
     Ice accretion on ships
 
     :param string Is: Is
-    :returns: Ice accretion description
-    :rtype: string
+    :returns: Integer value of Is or / if unavailable
+    :rtype: int or string
     :raises: pymetdecoder.DecodeError if Is is invalid
     """
-    accretions = [
-        "",
-        "Icing from ocean spray",
-        "Icing from fog",
-        "Icing from spray and fog",
-        "Icing from rain",
-        "Icing from spray and rain"
-    ]
-    try:
-        return accretions[int(Is)]
-    except KeyError as e:
-        raise pymetdecoder.DecodeError("{} is not a valid code for code table 1751".format(Is))
+    return _checkRange(Is, "1751", min=1, max=5)
 def codeTable3551(Rs):
     """
     Rate of ice accretion on ships
 
     :param string Rs: Rs
-    :returns: Ice accretion rate
-    :rtype: string
+    :returns: Integer value of Rs or / if unavailable
+    :rtype: int or string
     :raises: pymetdecoder.DecodeError if Rs is invalid
     """
-    rates = [
-        "Ice not building up",
-        "Ice building up slowly",
-        "Ice building up rapidly",
-        "Ice melting or breaking up slowly",
-        "Ice melting or breaking up rapidly"
-    ]
-    try:
-        return rates[int(Rs)]
-    except KeyError as e:
-        raise pymetdecoder.DecodeError("{} is not a valid code for code table 3551".format(Rs))
+    return _checkRange(Rs, "3551", max=4)
 def codeTable3590(RRR):
     """
     Amount of precipitation which has fallen during the reporting period
@@ -300,6 +280,16 @@ def codeTable3855(sw):
         return (method, sign)
     except KeyError as e:
         raise pymetdecoder.DecodeError("{} is not a valid code for code table 3855".format(Rs))
+def codeTable3739(Si):
+    """
+    Stage of development
+
+    :param string Si: Si
+    :returns:  Integer value of Si or / if not available
+    :rtype: int or string
+    :raises: pymetdecoder.DecodeError if Si is invalid
+    """
+    return _checkRange(Si, "3739", max=9)
 def codeTable4019(t):
     """
     Duration of period of reference for amount of precipitation, ending at the time of the report
@@ -382,3 +372,13 @@ def codeTable4451(vs):
         speedKMH = (kmhRange[vs], kmhRange[vs + 1] - 1, None)
 
     return (speedKT, speedKMH)
+def codeTable5239(zi):
+    """
+    Present ice situation and trend of conditions over preceding three hours
+
+    :param string zi: zi
+    :returns:  Integer value of zi or / if not available
+    :rtype: int or string
+    :raises: pymetdecoder.DecodeError if zi is invalid
+    """
+    return _checkRange(zi, "5239", max=9)

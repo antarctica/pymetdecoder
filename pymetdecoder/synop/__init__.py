@@ -215,7 +215,7 @@ class SYNOP(pymetdecoder.Report):
 
             ### SECTION 3 ###
             if next_group[0:3] == "333":
-                print("doing section 3")
+                # print("doing section 3")
                 pass
 
 

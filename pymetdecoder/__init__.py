@@ -17,6 +17,7 @@ class DecodeError(Exception):
 ################################################################################
 # BASE CLASSES
 ################################################################################
+import json
 class Report(object):
     """
     Base class for a meteorological report
@@ -32,7 +33,8 @@ class Report(object):
         :raises: NotImplementedError if called from the base class
         """
         raise NotImplementedError("decode is not implemented for {}".format(type(self).__name__))
-
+    def toJSON(self):
+        return json.dumps(self.data, cls=ObsEncoder)
 class Observation(object):
     """
     Base class for an Observation
@@ -77,7 +79,7 @@ class Observation(object):
         :returns: False if value is not available (i.e. report contains /), otherwise True
         :rtype: boolean
         """
-        toCheck = self.raw if value is None else value
+        toCheck = str(self.raw) if value is None else str(value)
         return not bool(toCheck.count(char) == len(toCheck))
     def setAvailability(self, value=None):
         """
@@ -100,11 +102,13 @@ class Observation(object):
         :param string unit: Unit of measurement
         """
         setattr(self, "unit", unit)
-
     def __repr__(self):
         return str(vars(self))
     def __str__(self):
         return self.__repr__()
+class ObsEncoder(json.JSONEncoder):
+    def default(self, o):
+        return o.__dict__
 ################################################################################
 # IMPORTS
 ################################################################################
