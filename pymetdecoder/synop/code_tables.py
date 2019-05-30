@@ -8,14 +8,13 @@
 ################################################################################
 # CONFIGURATION
 ################################################################################
-import pymetdecoder, re
+import pymetdecoder, re, logging
 ################################################################################
 # FUNCTIONS
 ################################################################################
-def _checkRange(x, table, min=0, max=0, nullChar="/"):
+def checkRange(x, table, min=0, max=0, nullChar="/"):
     """
-    Private function to check if a given value is in the allowed range for the
-    code table
+    Function to check if a given value is in the allowed range for the code table
 
     :param string x: Value to check
     :param string table: Code table
@@ -35,9 +34,9 @@ def _checkRange(x, table, min=0, max=0, nullChar="/"):
         elif min <= int(x) <= max:
             return int(x)
         else:
-            raise pymetdecoder.DecodeError("{} is not a valid code for code table {}".format(x, table))
+            logging.warning("{} is not a valid code for code table {}".format(x, table))
     except Exception as e:
-        raise pymetdecoder.DecodeError("{} is not a valid code for code table {}".format(x, table))
+        logging.warning("{} is not a valid code for code table {}".format(x, table))
 ################################################################################
 # MAIN BODY
 ################################################################################
@@ -59,17 +58,6 @@ def codeTable0161(A1):
         return regions[int(A1[0:1])]
     else:
         raise pymetdecoder.DecodeError("{} is not a valid code for code table 0161".format(A1))
-def codeTable0200(a):
-    """
-    Characteristic of pressure tendency during the three hours preceding the time
-    of observation
-
-    :param string a: a
-    :returns: Integer value of a
-    :rtype: int
-    :raises: pymetdecoder.DecodeError if a is invalid or out of range
-    """
-    return _checkRange(a, "0200", max=8)
 def codeTable0264(a3):
     """
     Standard isobaric surface for which the geopotential is reported
@@ -83,27 +71,7 @@ def codeTable0264(a3):
     if surfaces[a3] is None:
         raise pymetdecoder.DecodeError("{} is not a valid code for code table 0264".format(a3))
     else:
-        return surfaces[a]
-def codeTable0439(bi):
-    """
-    Ice of land origin
-
-    :param string bi: bi
-    :returns: Integer value of bi or / if not available
-    :rtype: int or string
-    :raises: pymetdecoder.DecodeError if bi is invalid
-    """
-    return _checkRange(bi, "0439", max=9)
-def codeTable0639(ci):
-    """
-    Concentration or arrangement of sea ice
-
-    :param string ci: ci
-    :returns:  Integer value of ci or / if not available
-    :rtype: string
-    :raises: pymetdecoder.DecodeError if ci is invalid
-    """
-    return _checkRange(ci, "0639", max=9)
+        return surfaces[a3]
 def codeTable0700(D):
     """
     Direction or bearing in one figure
@@ -118,7 +86,7 @@ def codeTable0700(D):
     """
     if D == "/":
         return (None, None, None)
-    directions = ["", "NE", "E", "SE", "S", "SW", "W", "NW", "N", None]
+    directions = ["", "NE", "E", "SE", "S", "SW", "W", "NW", "N", ""]
     isCalmOrStationary = False
     allDirections = False
     if int(D) == 0:
@@ -149,7 +117,8 @@ def codeTable0739(Di):
 
         return (direction, shipInShore, shipInIce)
     except Exception as e:
-        raise pymetdecoder.DecodeError("{} is not a valid value for code table 0739".format(Di))
+        raise logging.warning("{} is not a valid value for code table 0739".format(Di))
+        return (None, None, None)
 def codeTable0877(dd):
     """
     True direction, in tens of degrees, from which wind is blowing
@@ -280,16 +249,6 @@ def codeTable3855(sw):
         return (method, sign)
     except KeyError as e:
         raise pymetdecoder.DecodeError("{} is not a valid code for code table 3855".format(Rs))
-def codeTable3739(Si):
-    """
-    Stage of development
-
-    :param string Si: Si
-    :returns:  Integer value of Si or / if not available
-    :rtype: int or string
-    :raises: pymetdecoder.DecodeError if Si is invalid
-    """
-    return _checkRange(Si, "3739", max=9)
 def codeTable4019(t):
     """
     Duration of period of reference for amount of precipitation, ending at the time of the report
@@ -318,7 +277,7 @@ def codeTable4377(VV):
     visibility = None
     quantifier = None
     if 51 <= VV <= 55:
-        raise pymetdecoder.DecodeError("{} is not a valid visibility code for code table 4377".format(VV))
+        logging.warning("{} is not a valid visibility code for code table 4377".format(VV))
     if VV == 0:
         visibility = 100
         quantifier = "isLess"
@@ -343,7 +302,7 @@ def codeTable4377(VV):
         visibility = 50000
         quantifier = "isGreaterOrEqual"
     else:
-        raise pymetdecoder.DecodeError("{} is not a valid visibility code for code table 4377".format(VV))
+        logging.warning("{} is not a valid visibility code for code table 4377".format(VV))
 
     # Return the values
     return (visibility, quantifier)
@@ -358,7 +317,7 @@ def codeTable4451(vs):
     :rtype: tuple (int, int, string or None)
     """
     if vs == "/":
-        return (None, None, None)
+        return ((None, None, None), (None, None, None))
     vs = int(vs)
     if vs == 0:
         speedKT  = (0, 0, None)
@@ -372,13 +331,3 @@ def codeTable4451(vs):
         speedKMH = (kmhRange[vs], kmhRange[vs + 1] - 1, None)
 
     return (speedKT, speedKMH)
-def codeTable5239(zi):
-    """
-    Present ice situation and trend of conditions over preceding three hours
-
-    :param string zi: zi
-    :returns:  Integer value of zi or / if not available
-    :rtype: int or string
-    :raises: pymetdecoder.DecodeError if zi is invalid
-    """
-    return _checkRange(zi, "5239", max=9)

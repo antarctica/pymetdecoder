@@ -8,7 +8,7 @@
 ################################################################################
 # CONFIGURATION
 ################################################################################
-import re
+import re, logging
 import pymetdecoder
 from . import section0
 from . import section1
@@ -74,9 +74,12 @@ class SYNOP(pymetdecoder.Report):
             # Parse the next group, based on the group header
             for i in range(1, 10):
                 try:
-                    header = int(next_group[0:1])
+                    if not re.match("^(222|333)", next_group):
+                        header = int(next_group[0:1])
+                    else:
+                        header = None
                 except ValueError as e:
-                    raise pymetdecoder.DecodeError("{} is not a valid section 1 group header".format(header))
+                    logging.warning("{} is not a valid section 1 group".format(next_group))
                     break
                 if header == i:
                     if i == 1: # Air temperature
@@ -89,7 +92,9 @@ class SYNOP(pymetdecoder.Report):
                             self.data["dewpointTemperature"] = section1.Temperature(next_group, "Cel")
                     elif i == 3: # Station pressure
                         if not self._isGroupValid(next_group):
-                            raise pymetdecoder.DecodeError("{} is an invalid station level pressure group".format(next_group))
+                            logging.warning("{} is an invalid station level pressure group".format(next_group))
+                            next_group = next(groups)
+                            continue
 
                         # Create the data array
                         self.data["stationPressure"] = section1.Pressure(next_group, "hPa")
@@ -97,24 +102,33 @@ class SYNOP(pymetdecoder.Report):
                         self.parseSeaLevelPressureGeopotential(next_group)
                     elif i == 5: # Pressure tendency
                         if not self._isGroupValid(next_group):
-                            raise pymetdecoder.DecodeError("{} is an invalid pressure tendency group".format(next_group))
+                            logging.warning("{} is an invalid pressure tendency group".format(next_group))
+                            next_group = next(groups)
+                            continue
 
                         # Create the data array
                         self.data["pressureTendency"] = section1.PressureTendency(next_group)
                     elif i == 6: # Precipitation
                         if not self._isGroupValid(next_group):
-                            raise pymetdecoder.DecodeError("{} is an invalid precipitation group".format(next_group))
+                            logging.warning("{} is an invalid precipitation group".format(next_group))
+                            next_group = next(groups)
+                            continue
 
                         # Create the data array
                         self.data["precipitation"] = section1.Precipitation(next_group)
                     elif i == 7: # Present and past weather
                         if not self._isGroupValid(next_group):
-                            raise pymetdecoder.DecodeError("{} is an invalid weather group".format(next_group))
+                            logging.warning("{} is an invalid weather group".format(next_group))
+                            next_group = next(groups)
+                            continue
 
                         # If the weather indicator says we're not including a group 7 code, yet we find one
                         # something went wrong somewhere
-                        if self.data["weatherIndicator"].value not in [1, 4, 7]:
-                            raise pymetdecoder.DecodeError("Group 7 codes found, despite reported as being omitted (ix = {})".format(self.data["weatherIndicator"].value))
+                        try:
+                            if self.data["weatherIndicator"].value not in [1, 4, 7]:
+                                logging.warning("Group 7 codes found, despite reported as being omitted (ix = {})".format(self.data["weatherIndicator"].value))
+                        except AttributeError:
+                            pass
 
                         # Create the data array
                         self.data["presentWeather"] = section1.Weather(next_group[1:3])
@@ -124,13 +138,17 @@ class SYNOP(pymetdecoder.Report):
                         ]
                     elif i == 8: # Cloud type and amount
                         if not self._isGroupValid(next_group):
-                            raise pymetdecoder.DecodeError("{} is an invalid cloud type/amount group".format(next_group))
+                            logging.warning("{} is an invalid cloud type/amount group".format(next_group))
+                            next_group = next(groups)
+                            continue
 
                         # Create the data array
                         self.data["cloudTypes"] = section1.CloudTypes(next_group)
                     elif i == 9: # Exact observation time
                         if not self._isGroupValid(next_group):
-                            raise pymetdecoder.DecodeError("{} is an invalid exact observation time group".format(next_group))
+                            logging.warning("{} is an invalid exact observation time group".format(next_group))
+                            next_group = next(groups)
+                            continue
 
                         # Create the data array
                         self.data["exactObsTime"] = section1.ExactObservationTime(next_group)
@@ -144,18 +162,25 @@ class SYNOP(pymetdecoder.Report):
                 # Parse the next group, based on the group header
                 for i in range(0, 9):
                     try:
-                        header = int(next_group[0:1])
+                        if not re.match("^(ICE|333)", next_group):
+                            header = int(next_group[0:1])
+                        else:
+                            header = None
                     except ValueError as e:
-                        raise pymetdecoder.DecodeError("{} is not a valid section 1 group header".format(header))
+                        logging.warning("{} is not a valid section 2 group".format(next_group))
                         break
                     if header == i:
                         if i == 0: # Sea surface temperature
                             if not self._isGroupValid(next_group):
-                                raise pymetdecoder.DecodeError("{} is an invalid sea surface temperature group".format(next_group))
+                                logging.warning("{} is an invalid sea surface temperature group".format(next_group))
+                                next_group = next(groups)
+                                continue
                             self.data["seaSurfaceTemperature"] = section2.SeaSurfaceTemperature(next_group)
                         if i == 1: # Period and height of waves (instrumental)
                             if not self._isGroupValid(next_group):
-                                raise pymetdecoder.DecodeError("{} is an invalid instrumental wave group".format(next_group))
+                                logging.warning("{} is an invalid instrumental wave group".format(next_group))
+                                next_group = next(groups)
+                                continue
                             if "waves" not in self.data:
                                 self.data["waves"] = {}
                             if "wind" not in self.data["waves"]:
@@ -163,7 +188,9 @@ class SYNOP(pymetdecoder.Report):
                             self.data["waves"]["wind"].append(section2.WindWaves(next_group, instrumental=True))
                         if i == 2: # Period and height of wind waves
                             if not self._isGroupValid(next_group):
-                                raise pymetdecoder.DecodeError("{} is an invalid wind wave group".format(next_group))
+                                logging.warning("{} is an invalid wind wave group".format(next_group))
+                                next_group = next(groups)
+                                continue
                             if "waves" not in self.data:
                                 self.data["waves"] = {}
                             if "wind" not in self.data["waves"]:
@@ -171,7 +198,9 @@ class SYNOP(pymetdecoder.Report):
                             self.data["waves"]["wind"].append(section2.WindWaves(next_group, instrumental=False))
                         if i == 3: # Swell wave directions
                             if not self._isGroupValid(next_group):
-                                raise pymetdecoder.DecodeError("{} is an invalid swell wave direction group".format(next_group))
+                                logging.warning("{} is an invalid swell wave direction group".format(next_group))
+                                next_group = next(groups)
+                                continue
                             swData = [next_group]
                             swGroups = [4]
                             # if next_group[1:3] != "//":
@@ -180,28 +209,41 @@ class SYNOP(pymetdecoder.Report):
                                 swGroups.append(5) # We are expecting group 5 data
                         if i == 4 or i == 5: # Swell wave period and height
                             if not self._isGroupValid(next_group):
-                                raise pymetdecoder.DecodeError("{} is an invalid swell wave group".format(next_group))
+                                logging.warning("{} is an invalid swell wave group".format(next_group))
+                                next_group = next(groups)
+                                continue
                             try:
                                 swGroups
                             except NameError as e:
                                 swGroups = []
 
-                            swData.append(next_group)
+                            try:
+                                swData.append(next_group)
+                            except UnboundLocalError as e:
+                                logging.warning("{} is an invalid swell wave group".format(next_group))
+                                continue
+
                             if len(swData) == len(swGroups) + 1:
                                 if "waves" not in self.data:
                                     self.data["waves"] = {}
                                 self.data["waves"]["swell"] = section2.SwellWaves(" ".join(swData))
                         if i == 6: # Ice accretion
                             if not self._isGroupValid(next_group):
-                                raise pymetdecoder.DecodeError("{} is an invalid ice accretion group".format(next_group))
+                                logging.warning("{} is an invalid ice accretion group".format(next_group))
+                                next_group = next(groups)
+                                continue
                             self.data["iceAccretion"] = section2.IceAccretion(next_group)
                         if i == 7: # Accurate wave heights
                             if not self._isGroupValid(next_group):
-                                raise pymetdecoder.DecodeError("{} is an invalid wave height group".format(next_group))
+                                logging.warning("{} is an invalid wave height group".format(next_group))
+                                next_group = next(groups)
+                                continue
                             self.data["waves"]["wind"].append(section2.WindWaves(next_group, instrumental=True))
                         if i == 8: # Wet bulb temperature
                             if not self._isGroupValid(next_group):
-                                raise pymetdecoder.DecodeError("{} is an invalid wet bulb temperature group".format(next_group))
+                                logging.warning("{} is an invalid wet bulb temperature group".format(next_group))
+                                next_group = next(groups)
+                                continue
                             self.data["wetBulbTemperature"] = section2.WetBulbTemperature(next_group, "Cel")
                         next_group = next(groups)
 
@@ -211,29 +253,19 @@ class SYNOP(pymetdecoder.Report):
                 while next_group[0:3] != "333":
                     iceGroups.append(next_group)
                     next_group = next(groups)
-            self.data["seaLandIce"] = section2.SeaLandIce(iceGroups)
+            if len(iceGroups) > 0:
+                self.data["seaLandIce"] = section2.SeaLandIce(iceGroups)
 
             ### SECTION 3 ###
             if next_group[0:3] == "333":
                 # print("doing section 3")
                 pass
 
-
-            # Determine next section
-            # print(next_group[0:3])
-            # if next_group[0:3] == "222":
-            #     ### SECTION 2 ###
-            #     print("do section 2 stuff")
-            # elif next_group[0:3] == "333":
-            #     # do section 3 stuff
-            #     print("do section 3 stuff")
-            # else:
-            #     raise pymetdecoder.DecodeError("I'm not sure what to do with {}".format(next_group))
-
         except StopIteration:
             # If we have reached this point with iceGroups still intact, parse them
             try:
-                self.data["seaLandIce"] = section2.SeaLandIce(iceGroups)
+                if len(iceGroups) > 0:
+                    self.data["seaLandIce"] = section2.SeaLandIce(iceGroups)
             except UnboundLocalError as e:
                 pass
             return
@@ -245,11 +277,11 @@ class SYNOP(pymetdecoder.Report):
         the obsTime and windIndicator data values
 
         :param string group: SYNOP code to decode
-        :raises: pymetdecoder.DecodeError if groups is not a valid YYGGi group
         """
         # Check group matches regular expression
         if not self._isGroupValid(group):
-            raise pymetdecoder.DecodeError("{} is an invalid YYGGi group".format(group))
+            logging.warning("{} is an invalid YYGGi group".format(group))
+            return
 
         # Add observation time to data
         self.data["obsTime"] = section0.ObservationTime(group[0:4])
@@ -263,11 +295,11 @@ class SYNOP(pymetdecoder.Report):
         data values
 
         :param string group: SYNOP code to decode
-        :raises: pymetdecoder.DecodeError if groups is not a valid iihVV group
         """
         # Check group matches regular expression
         if not self._isGroupValid(group):
-            raise pymetdecoder.DecodeError("{} is an invalid iihVV group".format(group))
+            logging.warning("{} is an invalid iihVV group".format(group))
+            return
 
         # Get the precipitation indicator (iR)
         self.data["precipitationIndicator"] = section1.PrecipitationIndicator(group[0:1])
@@ -286,10 +318,10 @@ class SYNOP(pymetdecoder.Report):
         and surfaceWind data values
 
         :param string group: SYNOP code to decode
-        :raises: pymetdecoder.DecodeError if groups is not a valid Nddff group
         """
         if not self._isGroupValid(group):
-            raise pymetdecoder.DecodeError("{} is an invalid Nddff group".format(group))
+            logging.warning("{} is an invalid Nddff group".format(group))
+            return
 
         # Get total cloud cover (N)
         self.data["cloudCover"] = section1.CloudCover(group[0:1], unit="okta")
@@ -304,7 +336,6 @@ class SYNOP(pymetdecoder.Report):
         data value
 
         :param string group: SYNOP code to decode
-        :raises: pymetdecoder.DecodeError if groups is not a valid 1snTTT group
         """
         if not self._isGroupValid(group):
             raise pymetdecoder.DecodeError("{} is an invalid air temperature group".format(group))
@@ -319,10 +350,10 @@ class SYNOP(pymetdecoder.Report):
         and sets the relativeHumidity and/or dewpoint temperature data values
 
         :param string group: SYNOP code to decode
-        :raises: pymetdecoder.DecodeError if groups is not a valid dewpoint temperature/relative humidity group
         """
         if not self._isGroupValid(group):
-            raise pymetdecoder.DecodeError("{} is an invalid dewpoint temperature/relative humidity group".format(group))
+            logging.warning("{} is an invalid dewpoint temperature/relative humidity group".format(group))
+            return
 
         # Get sign and temperature
         sn  = group[1:2]
@@ -351,10 +382,10 @@ class SYNOP(pymetdecoder.Report):
         the seaLevelPressure and/or geopotential data values
 
         :param string group: SYNOP code to decode
-        :raises: pymetdecoder.DecodeError if groups is not a valid sea level pressure/geopotential group
         """
         if not self._isGroupValid(group):
-            raise pymetdecoder.DecodeError("{} is an invalid sea level pressure/geopotential group".format(group))
+            logging.warning("{} is an invalid sea level pressure/geopotential group".format(group))
+            return
 
         # Determine if this is pressure or geopotential height
         a = group[1]

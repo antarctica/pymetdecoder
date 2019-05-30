@@ -8,7 +8,7 @@
 ################################################################################
 # CONFIGURATION
 ################################################################################
-import re, types, pymetdecoder
+import re, types, pymetdecoder, logging
 from . import code_tables as ct
 ################################################################################
 # OBSERVATION CLASSES
@@ -22,7 +22,9 @@ class PrecipitationIndicator(pymetdecoder.Observation):
     def setValue(self):
         # Check indicator is valid
         if not re.match("[01234/]$", self.raw):
-            raise pymetdecoder.DecodeError("{} is an invalid value for the precipitation indicator (iR)".format(self.raw))
+            logging.warning("{} is an invalid value for the precipitation indicator (iR)".format(self.raw))
+            self.available = False
+            return
 
         self.value = int(self.raw)
         self.inGroup1 = True if self.raw in [0, 1] else False
@@ -36,7 +38,9 @@ class WeatherIndicator(pymetdecoder.Observation):
     def setValue(self):
         # Check indicator is valid
         if not re.match("[1234567/]$", self.raw):
-            raise pymetdecoder.DecodeError("{} is an invalid value for the weather indicator (iX)".format(self.raw))
+            logging.warning("{} is an invalid value for the weather indicator (iX)".format(self.raw))
+            self.available = False
+            return
 
         self.value = int(self.raw)
         self.automatic = True if self.value >= 4 else False
@@ -202,9 +206,13 @@ class PressureTendency(pymetdecoder.Observation):
             if not self.isAvailable(value=a) or not self.isAvailable(value=ppp):
                 self.available = False
             else:
-                tendency = ct.codeTable0200(a)
-                self.tendency = tendency
-                self.change   = float("{:.1f}".format(int(ppp) / (10.0 if int(tendency) < 5 else -10.0)))
+                # Check indicator is valid
+                if not re.match("[012345678/]$", a):
+                    logging.warning("{} is an invalid value for the precipitation indicator (a)".format(a))
+                    self.available = False
+                    return
+                self.tendency = a if a == "/" else int(a)
+                self.change   = float("{:.1f}".format(int(ppp) / (10.0 if self.tendency < 5 else -10.0)))
 class Precipitation(pymetdecoder.Observation):
     """
     Precipitation
@@ -273,7 +281,7 @@ class CloudTypes(pymetdecoder.Observation):
             elif self.middleCloudType.available and 1 <= self.middleCloudType.value <= 9:
                 self.middleCloudCover = pymetdecoder.Observation(Nh, value=int(Nh))
             else:
-                raise pymetdecoder.DecodeError("Cloud cover (Nh = {}) reported, but there are no low or middle clouds (CL = {}, CM = {})".format(Nh, CL, CM))
+                logging.warning("Cloud cover (Nh = {}) reported, but there are no low or middle clouds (CL = {}, CM = {})".format(Nh, CL, CM))
     def _setCloudValue(self, val):
         try:
             obs = pymetdecoder.Observation(val, value=int(val))
