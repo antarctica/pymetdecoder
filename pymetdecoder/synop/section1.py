@@ -103,7 +103,15 @@ class _SurfaceWind(pymetdecoder.Observation):
         dd = ddff[0:2]
         ff = ddff[2:4]
 
-        # Return direction and speed
+        # Get direction and speed
+        direction = self.Direction().decode(dd)
+        speed = self.Speed().decode(ff)
+
+        # Perform sanity check - if the wind is calm, it can't have a speed
+        if direction["calm"] and speed["value"] > 0:
+            logging.warning("Wind is calm, yet has a speed (dd: {}, ff: {})".format(dd, ff))
+            return None
+
         return {
             "direction": self.Direction().decode(dd),
             "speed": self.Speed().decode(ff)
@@ -209,16 +217,16 @@ class _Geopotential(pymetdecoder.Observation):
             "height": self.Height().decode(hhh, surface=a)
         }
     def _encode(self, data, **kwargs):
+        surface = data["surface"] if "surface" in data else None
         return "{a}{hhh}".format(
-            a   = self.Surface().encode(data["surface"] if "surface" in data else None),
-            hhh = self.Height().encode(data["height"] if "height" in data else None)
+            a   = self.Surface().encode(surface),
+            hhh = self.Height().encode(data["height"] if "height" in data else None, surface=surface)
         )
     class Surface(pymetdecoder.Observation):
         _CODE = "a"
         _DESCRIPTION = "geopotential surface"
         _CODE_LEN = 1
         _CODE_TABLE = ct._CodeTable0264
-        _UNIT = "hPa"
     class Height(pymetdecoder.Observation):
         _CODE = "hhh"
         _DESCRIPTION = "geopotential height"
@@ -232,6 +240,16 @@ class _Geopotential(pymetdecoder.Observation):
                 return val + 3000 if val < 500 else 2000
             if surface == 8:
                 return val + 1000
+            return val
+        def _encode_convert(self, val, **kwargs):
+            surface = kwargs.get("surface")
+            code = int(surface["_code"])
+            if code == 2:
+                return val - 1000 if val <= 1300 else 0
+            if code == 7:
+                return val - 3000 if val <= 3500 else 2000
+            if code == 8:
+                return val - 1000
             return val
 class _PressureTendency(pymetdecoder.Observation):
     """

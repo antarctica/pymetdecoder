@@ -33,8 +33,8 @@ class EncodeError(Exception):
         self.msg = "encoding error: {}".format(msg)
         super().__init__(self.msg)
 class InvalidCode(Exception):
-    def __init__(self, val, desc, code):
-        self.msg = "{} is not a valid code for {} ({})".format(val, desc, code)
+    def __init__(self, val, desc):
+        self.msg = "{} is not a valid code for {}".format(val, desc)
         super().__init__(self.msg)
 ################################################################################
 # BASE CLASSES
@@ -77,78 +77,6 @@ class Report(object):
         raise NotImplementedError("_encode needs to be implemented in {} subclass".format(type(self).__name__))
     def toJSON(self):
         return json.dumps(self.data, cls=ObsEncoder)
-# class Observation(object):
-#     """
-#     Base class for an Observation
-#
-#     :param string/int raw: Raw value of observation
-#     :param string unit: Unit of measurement for the observation
-#     :param boolean availability: Check for the availability of this observation
-#     :param anything value: Calculated value of the observation
-#     :param boolean noValAttr: If true, do not set value attribute for this observation
-#     """
-#     def __init__(self, raw, unit=None, availability=True, value=None, noValAttr=False):
-#         # Set raw attribute
-#         self.raw = raw
-#         if not noValAttr:
-#             self.value = None
-#
-#         # Set the availability
-#         if availability:
-#             self.setAvailability()
-#
-#         # Set the value
-#         # if self.available or not availability:
-#         if not availability or (hasattr(self, "available") and self.available):
-#             if value is not None:
-#                 self.setValue(value)
-#                 # setattr(self, "value", value)
-#             # else:
-#                 # self.setValue()
-#
-#         # Set the unit
-#         if unit is not None:
-#             self.setUnit(unit)
-#
-#         # self.raw  = raw
-#         # if unit is not None:
-#         #     self.unit = unit
-#         # if availability:
-#         #     self.available = True
-#
-#     def isAvailable(self, char="/", value=None):
-#         """
-#         Checks if the value is available
-#
-#         :param string char: Character to use to determine if value is available
-#         :param anything value: Value to check
-#         :returns: False if value is not available (i.e. report contains /), otherwise True
-#         :rtype: boolean
-#         """
-#         toCheck = str(self.raw) if value is None else str(value)
-#         return not bool(toCheck.count(char) == len(toCheck))
-#     def setAvailability(self, value=None):
-#         """
-#         Sets "available" attribute
-#
-#         :param anything value: Value to check against
-#         """
-#         setattr(self, "available", self.isAvailable(value=value))
-#     def setValue(self, value):
-#         """
-#         Sets "value" attribute. Must be implemented in subclass
-#
-#         :raises: NotImplementedError if called from base class
-#         """
-#         setattr(self, "value", value)
-#         # raise NotImplementedError("setValue is not implemented for {}".format(type(self).__name__))
-#     def setUnit(self, unit):
-#         """
-#         Sets "unit" attribute
-#
-#         :param string unit: Unit of measurement
-#         """
-#         setattr(self, "unit", unit)
 class Observation(object):
     """
     Base class for an Observation
@@ -164,6 +92,9 @@ class Observation(object):
         self.null_char = null_char
         if hasattr(self, "_CODE_LEN") and not hasattr(self, "_ENCODE_DEFAULT"):
             self._ENCODE_DEFAULT = null_char * self._CODE_LEN
+        self._init_obs()
+    def _init_obs(self):
+        pass
     def decode(self, raw, **kwargs):
         """
         Decodes raw value into observation value(s)
@@ -219,7 +150,7 @@ class Observation(object):
             logging.warning(str(e))
         except Exception as e:
             # print(str(e))
-            logging.warning("No valid {}. Using {}".format(self._DESCRIPTION, self._ENCODE_DEFAULT))
+            logging.warning("No valid {}. Using {}".format(type(self).__name__, self._ENCODE_DEFAULT))
             if "group" in kwargs:
                 return "{}{}".format(kwargs.get("group"), self._ENCODE_DEFAULT)
             else:
@@ -261,7 +192,7 @@ class Observation(object):
         """
         valid = self._is_valid(value, **kwargs)
         if not valid:
-            foo = InvalidCode(value, self._DESCRIPTION, self._CODE)
+            foo = InvalidCode(value, type(self).__name__)
             if raise_exception:
                 raise foo
             else:
@@ -302,7 +233,6 @@ class Observation(object):
 
         # If we have reached this point, we can't validate. Therefore, assume it's valid
         return True
-        # raise Exception("Unable to validate {}. Need _VALID_VALUES, _VALID_RANGE or _VALID_REGEXP".format(self._DESCRIPTION))
     # def set_value(self, value, attr="value"):
     #     """
     #     Sets "value" attribute. Must be implemented in subclass
@@ -319,12 +249,16 @@ class Observation(object):
 
             # Get value from code table
             if hasattr(self, "_CODE_TABLE"):
-                out_val = self._CODE_TABLE().decode(val, **kwargs)
-                if isinstance(out_val, list):
-                    for a in out_val:
-                        a["_code"] = int(val)
-                else:
-                    out_val["_code"] = int(val)
+                table_opts = {}
+                if hasattr(self, "_TABLE"):
+                    table_opts["table"] = self._TABLE
+                out_val = self._CODE_TABLE(**table_opts).decode(val, **kwargs)
+                if self._CODE_TABLE.__name__ != "CodeTableSimple":
+                    if isinstance(out_val, list):
+                        for a in out_val:
+                            a["_code"] = int(val)
+                    else:
+                        out_val["_code"] = int(val)
             else:
                 out_val = val
 
@@ -345,7 +279,10 @@ class Observation(object):
         try:
             # Get value from code table. If no code table, use value attribute
             if hasattr(self, "_CODE_TABLE"):
-                out_val = self._CODE_TABLE().encode(data)
+                table_opts = {}
+                if hasattr(self, "_TABLE"):
+                    table_opts["table"] = self._TABLE
+                out_val = self._CODE_TABLE(**table_opts).encode(data)
             else:
                 out_val = data["value"] if "value" in data else None
 

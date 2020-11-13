@@ -153,6 +153,8 @@ class _Sunshine(pymetdecoder.Observation):
             duration = { "value": 24, "unit": "h" }
         elif group[2] == "3":
             duration = { "value": 1, "unit": "h" }
+        elif group[2] == "/":
+            return None
         else:
             raise pymetdecoder.DecodeError("{} is not a valid value for sunshine group duration".format(group[2]))
 
@@ -217,6 +219,48 @@ class _CloudDriftDirection(pymetdecoder.Observation):
         _DESCRIPTION = "direction of cloud drift"
         _CODE_LEN = 1
         _CODE_TABLE = ct._CodeTable0700
+class _CloudElevation(pymetdecoder.Observation):
+    """
+    Direction and elevation of cloud
+
+    * 57CDe - direction and elevation of cloud
+    """
+    _CODE = "CDe"
+    _DESCRIPTION = "direction and elevation of cloud"
+    _CODE_LEN = 3
+    def _decode(self, group):
+        # Get values
+        C = group[2]
+        D = group[3]
+        e = group[4]
+
+        # Return data
+        return {
+            "genus": self.CloudGenus().decode(C),
+            "direction": self.Direction().decode(D),
+            "elevation": self.Elevation().decode(e)
+        }
+    def _encode(self, data, **kwargs):
+        return "{C}{D}{e}".format(
+            C = self.CloudGenus().encode(data["genus"] if "genus" in data else None),
+            D = self.Direction().encode(data["direction"] if "direction" in data else None),
+            e = self.Elevation().encode(data["elevation"] if "elevation" in data else None, allow_none=True)
+        )
+    class CloudGenus(pymetdecoder.Observation):
+        _CODE = "C"
+        _DESCRIPTION = "cloud genus"
+        _CODE_LEN = 1
+        _CODE_TABLE = ct._CodeTable0500
+    class Direction(pymetdecoder.Observation):
+        _CODE = "D"
+        _DESCRIPTION = "direction of cloud"
+        _CODE_LEN = 1
+        _CODE_TABLE = ct._CodeTable0700
+    class Elevation(pymetdecoder.Observation):
+        _CODE = "e"
+        _DESCRIPTION = "elevation of cloud"
+        _CODE_LEN = 1
+        _CODE_TABLE = ct._CodeTable1004
 class _PressureChange(pymetdecoder.Observation):
     """
     Change of surface pressure over the last 24 hours
@@ -281,6 +325,16 @@ class _Precipitation(pymetdecoder.Observation):
         _CODE_LEN = 4
         _UNIT = "mm"
         _CODE_TABLE = ct._CodeTable3590A
+class _PrevailingWind(pymetdecoder.Observation):
+    """
+    Prevailing wind
+
+    * 7D(ddd) - prevailing wind direction
+    """
+    _CODE = "D"
+    _DESCRIPTION = "prevailing wind direction"
+    _CODE_LEN = 1
+    _CODE_TABLE = ct._CodeTable0700
 class _CloudLayer(pymetdecoder.Observation):
     """
     Layers/masses of clouds
@@ -338,7 +392,7 @@ class _TimeBeforeObs(pymetdecoder.Observation):
     _DESCRIPTION = "time before observation"
     _CODE_LEN = 2
     _CODE_TABLE = ct._CodeTable4077
-class _PrecipitationEnd(pymetdecoder.Observation):
+class _PrecipitationTime(pymetdecoder.Observation):
     """
     Time at which precipitation given by RRR began or ended and duration and
     character of precipitation
@@ -355,17 +409,17 @@ class _PrecipitationEnd(pymetdecoder.Observation):
 
         # Decode and return
         return {
-            "end_time": self.EndTime().decode(R),
+            "time": self.Time().decode(R),
             "character": self.Character().decode(d)
         }
     def _encode(self, data, **kwargs):
         return "909{R}{d}".format(
-            R = self.EndTime().encode(data["end_time"] if "end_time" in data else None),
-            d = self.EndTime().encode(data["character"] if "character" in data else None)
+            R = self.Time().encode(data["time"] if "time" in data else None),
+            d = self.Time().encode(data["character"] if "character" in data else None)
         )
-    class EndTime(pymetdecoder.Observation):
+    class Time(pymetdecoder.Observation):
         _CODE = "R"
-        _DESCRIPTION = "end time of precipitation"
+        _DESCRIPTION = "begin or end time of precipitation"
         _CODE_LEN = 1
         _CODE_TABLE = ct._CodeTable3552
     class Character(pymetdecoder.Observation):
@@ -383,14 +437,19 @@ class _HighestGust(pymetdecoder.Observation):
     _DESCRIPTION = "highest gust"
     _CODE_LEN = 2
     def _decode(self, group, **kwargs):
-        # Get type and speed
-        t  = group[2]
-        ff = group[3:5]
+        # Get type, speed and direction
+        groups = group.split(" ")
+        t  = groups[0][2]
+        ff = groups[0][3:5]
+        dd = None if len(groups) == 1 else groups[1][3:5]
 
         # Return values
         time_before = kwargs.get("time_before")
         measure_period = kwargs.get("measure_period")
-        data = { "gust": self.Gust().decode(ff, unit=kwargs.get("unit")) }
+        data = {
+            "speed": self.Gust().decode(ff, unit=kwargs.get("unit")),
+            "direction": self.Direction().decode(dd)
+        }
         if time_before is not None:
             data["time_before_obs"] = time_before
         if measure_period is not None:
@@ -416,8 +475,14 @@ class _HighestGust(pymetdecoder.Observation):
                     raise pymetdecoder.EncodeError("Invalid value for measure_period")
 
             # Convert the gust
-            ff = self.Gust().encode(d["gust"] if "gust" in d else None)
+            ff = self.Gust().encode(d["speed"] if "speed" in d else None)
             output.append("{}{}".format(prefix, ff))
+
+            # Convert the direction
+            if "direction" in d and d["direction"] is not None:
+                output.append("915{dd}".format(
+                    dd = self.Direction().encode(d["direction"])
+                ))
 
         # Return the codes
         return " ".join(output)
@@ -425,6 +490,12 @@ class _HighestGust(pymetdecoder.Observation):
         _CODE = "ff"
         _DESCRIPTION = "highest gust"
         _CODE_LEN = 2
+    class Direction(pymetdecoder.Observation):
+        _CODE = "dd"
+        _DESCRIPTION = "gust direction"
+        _CODE_LEN = 2
+        _CODE_TABLE = ct._CodeTable0877
+        _UNIT = "deg"
 class _MeanWind(pymetdecoder.Observation):
     """
     Mean wind (highest/mean/lowest)
@@ -441,6 +512,36 @@ class _MeanWind(pymetdecoder.Observation):
                 ff = self._encode_value(data["highest"])
             ))
         return " ".join(output)
+class _SnowFall(pymetdecoder.Observation):
+    """
+    Snow fall
+
+    * 931ss - depth of newly fallen snow
+    """
+    _CODE = "931ss"
+    _DESCRIPTION = "depth of newly fallen snow"
+    _CODE_LEN = 2
+    def _decode(self, group, **kwargs):
+        # Get depth
+        ss = group[3:5]
+
+        # Return values
+        time_before = kwargs.get("time_before")
+        data = { "amount": self.Amount().decode(ss) }
+        if time_before is not None:
+            data["time_before_obs"] = time_before
+        return data
+    def _encode(self, data, **kwargs):
+        return "931{ss}".format(
+            ss = self.Amount().encode(data["amount"] if "amount" in data else None)
+        )
+    class Amount(pymetdecoder.Observation):
+        _CODE = "931ss"
+        _DESCRIPTION = "depth of newly fallen snow"
+        _CODE_LEN = 2
+        _CODE_TABLE = ct._CodeTable3870
+
+
 # class _RadiationObs(pymetdecoder.Observation):
 #     def convertUnit(self):
 #         """
