@@ -81,6 +81,9 @@ class SYNOP(pymetdecoder.Report):
                     "{} {} {} {}".format(next(groups), next(groups), next(groups), next(groups))
                 )
 
+            # Set the country, where possible
+            self.set_country(data)
+
             # If this section ends with NIL, that's the end of the SYNOP
             next_group = next(groups)
             if next_group == "NIL":
@@ -287,7 +290,15 @@ class SYNOP(pymetdecoder.Report):
                         # group_5 = None
                     else:
                         if header == 0:
-                            raise NotImplementedError("0xxxx is not implemented yet")
+                            if data["region"]["value"] == "Antarctic":
+                                # TODO: tidy this up a bit
+                                data["max_wind"] = obs.SurfaceWind().decode(next_group[1:5])
+                                data["max_wind"]["speed"]["unit"] = data["surface_wind"]["speed"]["unit"]
+                            elif data["region"]["value"] == "I":
+                                data["ground_minimum_temperature"] = obs.GroundMinimumTemperature().decode(next_group[1:3])
+                                data["local_precipitation"] = obs.LocalPrecipitation().decode(next_group[3:5])
+                            else:
+                                raise NotImplementedError("0xxxx is not valid for region {}".format(data["region"]["value"]))
                         elif header == 1:
                             data["maximum_temperature"] = obs.Temperature().decode(next_group)
                         elif header == 2:
@@ -383,7 +394,7 @@ class SYNOP(pymetdecoder.Report):
                             # If not, raise error
                             try:
                                 if data["precipitation_indicator"]["in_group_3"]:
-                                    data["precipitation_s3"] = obs.Precipitation().decode(next_group)
+                                    data["precipitation_s3"] = obs.Precipitation().decode(next_group, tenths=False)
                                 else:
                                     logging.warning("Unexpected precipitation group found in section 3")
                             except Exception:
@@ -393,7 +404,8 @@ class SYNOP(pymetdecoder.Report):
                                 data["prevailing_wind"] = obs.PrevailingWind().decode(next_group[1])
                                 data["cloud_drift_direction"] = obs.CloudDriftDirection().decode(next_group)
                             else:
-                                data["precipitation_s3"] = obs.Precipitation().decode(next_group) # tenths of mm
+                                # probably want this in a different key/value pair?
+                                data["precipitation_24h"] = obs.Precipitation().decode(next_group, tenths=True) # tenths of mm
                         elif header == 8:
                             if "cloud_layer" not in data:
                                 data["cloud_layer"] = []
@@ -709,7 +721,7 @@ class SYNOP(pymetdecoder.Report):
         # Only encode rest of section 2 if required
         if has_section_2:
             _section2 = [
-                ("sea_surface_temperature", obs.SeaSurfaceTemperature, { "group": "0" }, False),
+                ("sea_surface_temperature", obs.SeaSurfaceTemperature, { "group": "0", "allow_none": True }, False),
                 ("wind_waves", obs.WindWaves, { "_group": "1" }, False),
                 ("wind_waves", obs.WindWaves, { "_group": "2" }, False),
                 ("swell_waves", obs.SwellWaves, {}, False),
@@ -743,6 +755,19 @@ class SYNOP(pymetdecoder.Report):
         except:
             weather_time = None
         s3_groups = []
+        if "max_wind" in data:
+            if data["region"]["value"] == "Antarctic":
+                s3_groups.append(obs.SurfaceWind().encode(data["max_wind"], group="0"))
+            else:
+                raise pymetdecoder.EncodeError("max_wind not valid for region {}".format(data["region"]["value"]))
+        if "ground_minimum_temperature" in data or "local_precipitation" in data:
+            if data["region"]["value"] == "I":
+                s3_groups.append("0{}{}".format(
+                    obs.GroundMinimumTemperature().encode(data["ground_minimum_temperature"]),
+                    obs.LocalPrecipitation().encode(data["local_precipitation"])
+                ))
+            else:
+                raise pymetdecoder.EncodeError("ground_minimum_temperature and local_precipitation not valid for region {}".format(data["region"]["value"]))
         if "maximum_temperature" in data:
             s3_groups.append(obs.Temperature().encode(data["maximum_temperature"], group="1"))
         if "minimum_temperature" in data:
@@ -774,6 +799,8 @@ class SYNOP(pymetdecoder.Report):
                 s3_groups.append(obs.Precipitation().encode(data["precipitation_s3"]))
             else:
                 s3_groups.append(obs.Precipitation().encode(data["precipitation_s3"], group="6"))
+        if "precipitation_24h" in data:
+            s3_groups.append(obs.Precipitation().encode(data["precipitation_24h"], group="7", is_24h=True))
         if "prevailing_wind" in data:
             s3_groups.append("7{wind}{drift}".format(
                 wind = obs.PrevailingWind().encode(data["prevailing_wind"], allow_none=True),
@@ -827,6 +854,26 @@ class SYNOP(pymetdecoder.Report):
         if "visibility_direction" in data:
             for d in data["visibility_direction"]:
                 s3_groups.append(obs.VisibilityDirection().encode(d, group="98"))
+        if "optical_phenomena" in data:
+            s3_groups.append(obs.OpticalPhenomena().encode(data["optical_phenomena"], group="990"))
+        if "mirage" in data:
+            s3_groups.append(obs.Mirage().encode(data["mirage"], group="991"))
+        if "st_elmos_fire" in data:
+            s3_groups.append("99190")
+        if "condensation_trails" in data:
+            s3_groups.append(obs.CondensationTrails().encode(data["condensation_trails"], group="992"))
+        if "special_clouds" in data:
+            s3_groups.append(obs.SpecialClouds().encode(data["special_clouds"], group="993"))
+        if "day_darkness" in data:
+            s3_groups.append(obs.DayDarkness().encode(data["day_darkness"], group="994"))
+        if "sudden_temperature_change" in data:
+            s3_groups.append(obs.SuddenTemperatureChange().encode(data["sudden_temperature_change"],
+                group = "996" if data["sudden_temperature_change"]["value"] > 0 else "997"
+            ))
+        if "sudden_humidity_change" in data:
+            s3_groups.append(obs.SuddenHumidityChange().encode(data["sudden_humidity_change"],
+                group = "998" if data["sudden_humidity_change"]["value"] > 0 else "999"
+            ))
 
 
 
@@ -1055,7 +1102,7 @@ class SYNOP(pymetdecoder.Report):
 
         # Get precipitation, weather, lowest cloud and horizontal visibilty
         return (
-            obs.PrecipitationIndicator().decode(group[0:1]),
+            obs.PrecipitationIndicator().decode(group[0:1], country=self.country),
             obs.WeatherIndicator().decode(group[1:2]),
             obs.LowestCloudBase().decode(group[2:3]),
             obs.Visibility().decode(group[3:5])
@@ -1112,15 +1159,26 @@ class SYNOP(pymetdecoder.Report):
                         data["weather_info"] = {}
                     tz = g[3:5]
                     if tz != "//":
-                        if 0 <= int(tz) <= 60:
+                        if 0 <= int(tz) <= 75:
                             data["weather_info"]["time_before_obs"] = obs.TimeBeforeObs().decode(tz)
                         else:
                             data["weather_info"]["variability"] = obs.VariableLocationIntensity().decode(tz)
+                elif j[2] == "1":
+                    if "weather_info" not in data:
+                        data["weather_info"] = {}
+                    tt = g[3:5]
+                    data["weather_info"]["time_of_ending"] = obs.TimeOfEnding().decode(tt)
                 elif j[2] == "5":
                     if "weather_info" not in data:
                         data["weather_info"] = {}
                     data["weather_info"]["non_persistent"] = obs.TimeBeforeObs().decode(g[3:5])
                 elif j[2] == "7":
+                    # Ignore if next group begins with 910, since 907 doesn't apply
+                    try:
+                        if group_9[idx + 1].startswith("910"):
+                            continue
+                    except Exception:
+                        continue
                     time_before_obs = obs.TimeBeforeObs().decode(g[3:5])
                 elif j[2] == "9":
                     # Check present weather. If present weather is >= 50, this is the beginning
@@ -1211,14 +1269,36 @@ class SYNOP(pymetdecoder.Report):
                 else:
                     raise NotImplementedError("{} is not implemented yet".format(g))
             elif j[1] == "6":
-                if j[2] == "0":
-                    data["present_weather_additional"] = obs.Weather().decode(g[3:5], time_before=def_time_before)
+                if j[2] in ["0", "1"]:
+                    if "present_weather_additional" not in data:
+                        data["present_weather_additional"] = []
+                    data["present_weather_additional"].append(obs.Weather().decode(g[3:5], time_before=def_time_before))
                 else:
                     raise NotImplementedError("{} is not implemented yet".format(g))
             elif j[1] == "8":
                 if "visibility_direction" not in data:
                     data["visibility_direction"] = []
                 data["visibility_direction"].append(obs.VisibilityDirection().decode(g))
+            elif j[1] == "9":
+                if j[2] == "0":
+                    data["optical_phenomena"] = obs.OpticalPhenomena().decode(g)
+                elif j[2] == "1":
+                    if g[3:5] == "90":
+                        data["st_elmos_fire"] = True
+                    else:
+                        data["mirage"] = obs.Mirage().decode(g)
+                elif j[2] == "2":
+                    data["condensation_trails"] = obs.CondensationTrails().decode(g)
+                elif j[2] == "3":
+                    data["special_clouds"] = obs.SpecialClouds().decode(g)
+                elif j[2] == "4":
+                    data["day_darkness"] = obs.DayDarkness().decode(g)
+                elif j[2] in ["6", "7"]:
+                    data["sudden_temperature_change"] = obs.SuddenTemperatureChange().decode(g[2:5])
+                elif j[2] in ["8", "9"]:
+                    data["sudden_humidity_change"] = obs.SuddenHumidityChange().decode(g[2:5])
+                else:
+                    raise NotImplementedError("{} is not implemented yet".format(g))
             else:
                 raise NotImplementedError("{} is not implemented yet".format(g))
         return data
@@ -1389,3 +1469,16 @@ class SYNOP(pymetdecoder.Report):
             regexp_parts.append(" ")
         regexp = "[{}]{{{}}}".format("".join(regexp_parts), length)
         return bool(re.match(regexp, group))
+    def set_country(self, data):
+        """
+        Sets country where possible
+        """
+        self.country = None
+        try:
+            station_id = int(data["station_id"]["value"])
+
+            # Find country
+            if 20000 <= station_id <= 39999:
+                self.country = "RU"
+        except Exception:
+            return

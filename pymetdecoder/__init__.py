@@ -105,7 +105,7 @@ class Observation(object):
                 return None
 
             # Check if valid
-            if not self.is_valid(raw):
+            if not self.is_valid(raw, **kwargs):
                 return None
 
             # Decode
