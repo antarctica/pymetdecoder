@@ -280,6 +280,7 @@ class SYNOP(pymetdecoder.Report):
                             unit = radiation_unit,
                             time_before = radiation_time
                         )
+                        print(radiation)
                         radiation_type = RADIATION_TYPES[header]
                         if "radiation" not in data:
                             data["radiation"] = {}
@@ -401,7 +402,7 @@ class SYNOP(pymetdecoder.Report):
                                 raise pymetdecoder.DecodeError("Unexpected precipitation group found in section 3")
                         elif header == 7:
                             if data["region"]["value"] == "Antarctic":
-                                data["prevailing_wind"] = obs.PrevailingWind().decode(next_group[1])
+                                data["prevailing_wind"] = obs.DirectionCardinal().decode(next_group[1])
                                 data["cloud_drift_direction"] = obs.CloudDriftDirection().decode(next_group)
                             else:
                                 # probably want this in a different key/value pair?
@@ -803,11 +804,11 @@ class SYNOP(pymetdecoder.Report):
             s3_groups.append(obs.Precipitation().encode(data["precipitation_24h"], group="7", is_24h=True))
         if "prevailing_wind" in data:
             s3_groups.append("7{wind}{drift}".format(
-                wind = obs.PrevailingWind().encode(data["prevailing_wind"], allow_none=True),
+                wind = obs.DirectionCardinal().encode(data["prevailing_wind"], allow_none=True),
                 drift = obs.CloudDriftDirection().encode(data["cloud_drift_direction"] if "cloud_drift_direction" in data else None)
             ))
         if "cloud_layer" in data:
-            s3_groups.append(obs.CloudLayer().encode(data["cloud_layer"], use90=useCloud90))
+            s3_groups.append(obs.CloudLayer().encode(data["cloud_layer"], use90=useCloud90, group="8"))
         if "weather_info" in data:
             if "time_before_obs" in data["weather_info"]:
                 s3_groups.append(obs.TimeBeforeObs().encode(data["weather_info"]["time_before_obs"], group="900"))
@@ -816,9 +817,9 @@ class SYNOP(pymetdecoder.Report):
             if "non_persistent" in data["weather_info"]:
                 s3_groups.append(obs.TimeBeforeObs().encode(data["weather_info"]["non_persistent"], group="905"))
         if "precipitation_begin" in data:
-            s3_groups.append(obs.PrecipitationTime().encode(data["precipitation_begin"]))
+            s3_groups.append(obs.PrecipitationTime().encode(data["precipitation_begin"], group="909"))
         if "precipitation_end" in data:
-            s3_groups.append(obs.PrecipitationTime().encode(data["precipitation_end"]))
+            s3_groups.append(obs.PrecipitationTime().encode(data["precipitation_end"], group="909"))
         if "highest_gust" in data:
             s3_groups.append(obs.HighestGust().encode(data["highest_gust"], time_before=weather_time))
         if "mean_wind" in data:

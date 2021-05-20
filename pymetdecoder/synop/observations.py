@@ -11,7 +11,7 @@
 # CONFIGURATION
 ################################################################################
 import re
-from pymetdecoder import Observation, logging, DecodeError, EncodeError
+from pymetdecoder import Observation, logging, DecodeError, EncodeError, InvalidCode
 from pymetdecoder import code_tables as ct
 ################################################################################
 # SHARED CLASSES
@@ -19,6 +19,7 @@ from pymetdecoder import code_tables as ct
 class SimpleCodeTable(Observation):
     _CODE_TABLE = ct.CodeTableSimple
     _VALID_RANGE = (0, 9) # default valid range
+    _CODE_LEN = 1
 class CloudCover(Observation):
     """
     Cloud cover
@@ -74,6 +75,7 @@ class SignedTemperature(Observation):
     def _decode(self, raw, **kwargs):
         sign = kwargs.get("sign")
         if str(sign) not in ["0", "1"]:
+            raise pymetdecoder.InvalidCode(sign, "temperature sign")
             return None
         return self._decode_value(raw, sign=sign)
     def _decode_convert(self, val, **kwargs):
@@ -87,11 +89,7 @@ class SignedTemperature(Observation):
 class Visibility(Observation):
     """
     Visibility
-
-    * (iRixh)VV - Horizontal visibility at surface
     """
-    _CODE = "VV"
-    _DESCRIPTION = "horizontal visibility at surface"
     _CODE_LEN = 2
     _CODE_TABLE = ct.CodeTable4377
     _UNIT = "m"
@@ -124,101 +122,42 @@ class Callsign(Observation):
 class CloudDriftDirection(Observation):
     """
     Direction of cloud drift
-
-    * 56DDD - Direction of cloud drift
     """
-    _CODE = "DDD"
-    _DESCRIPTION = "direction of cloud drift"
     _CODE_LEN = 3
-    def _decode(self, group):
-        DL = group[2]
-        DM = group[3]
-        DH = group[4]
-        attrs = ["low", "middle", "high"]
-
-        output = {}
-        for idx, d in enumerate([DL, DM, DH]):
-            output[attrs[idx]] = self.Direction().decode(d)
-        return output
-    def _encode(self, data, **kwargs):
-        return "{DL}{DM}{DH}".format(
-            DL = self.Direction().encode(data["low"] if "low" in data else None, allow_none=True),
-            DM = self.Direction().encode(data["middle"] if "middle" in data else None, allow_none=True),
-            DH = self.Direction().encode(data["high"] if "high" in data else None, allow_none=True)
-        )
-    class Direction(DirectionCardinal):
-        _DESCRIPTION = "direction of cloud drift"
+    _COMPONENTS = [
+        ("low", 2, 1, DirectionCardinal),
+        ("middle", 3, 1, DirectionCardinal),
+        ("high", 4, 1, DirectionCardinal)
+    ]
 class CloudElevation(Observation):
     """
     Direction and elevation of cloud
-
-    * 57CDe - direction and elevation of cloud
     """
-    _CODE = "CDe"
-    _DESCRIPTION = "direction and elevation of cloud"
     _CODE_LEN = 3
-    def _decode(self, group):
-        # Get values
-        C = group[2]
-        D = group[3]
-        e = group[4]
-
-        # Return data
-        return {
-            "genus": CloudGenus().decode(C),
-            "direction": self.Direction().decode(D),
-            "elevation": self.Elevation().decode(e)
-        }
-    def _encode(self, data, **kwargs):
-        return "{C}{D}{e}".format(
-            C = CloudGenus().encode(data["genus"] if "genus" in data else None),
-            D = self.Direction().encode(data["direction"] if "direction" in data else None, allow_none=True),
-            e = self.Elevation().encode(data["elevation"] if "elevation" in data else None, allow_none=True)
-        )
-    class Direction(DirectionCardinal):
-        _DESCRIPTION = "direction of cloud"
     class Elevation(Observation):
-        _CODE = "e"
-        _DESCRIPTION = "elevation of cloud"
         _CODE_LEN = 1
         _CODE_TABLE = ct.CodeTable1004
+    _COMPONENTS = [
+        ("genus", 2, 1, CloudGenus),
+        ("direction", 3, 1, DirectionCardinal),
+        ("elevation", 4, 1, Elevation)
+    ]
 class CloudEvolution(Observation):
     """
     Evolution of clouds
-
-    * 940Cn - evolution of clouds
     """
-    _CODE = "940Cn"
-    _DESCRIPTION = "evolution of clouds"
     _CODE_LEN = 2
-    def _decode(self, group):
-        # Get values
-        C = group[3]
-        n = group[4]
-
-        # Return data
-        return {
-            "genus": CloudGenus().decode(C),
-            "evolution": self.Evolution().decode(n)
-        }
-    def _encode(self, data, **kwargs):
-        return "{C}{n}".format(
-            C = CloudGenus().encode(data["genus"] if "genus" in data else None),
-            n = self.Evolution().encode(data["evolution"] if "evolution" in data else None)
-        )
     class Evolution(Observation):
-        _CODE = "n"
-        _DESCRIPTION = "cloud evolution"
         _CODE_LEN = 1
-        _VALID_RANGE = (0, 9)
+        _CODE_TABLE = ct.CodeTable2863
+    _COMPONENTS = [
+        ("genus", 3, 1, CloudGenus),
+        ("evolution", 4, 1, Evolution)
+    ]
 class CloudLayer(Observation):
     """
     Layers/masses of clouds
-
-    * 8NChh - Cloud layer
     """
-    _CODE = "NChh"
-    _DESCRIPTION = "cloud layer"
     _CODE_LEN = 4
     def _decode(self, group):
         N = group[1]
@@ -226,36 +165,27 @@ class CloudLayer(Observation):
         hh = group[3:5]
 
         return {
-            "cloud_cover": self.CloudCover().decode(N),
+            "cloud_cover": CloudCover().decode(N),
             "cloud_genus": CloudGenus().decode(C),
             "cloud_height": self.Height().decode(hh)
         }
     def _encode(self, data, **kwargs):
         output = []
         for d in data:
-            output.append("{g}{N}{C}{hh}".format(
-                g  = kwargs.get("group", 8),
-                N  = self.CloudCover().encode(d["cloud_cover"] if "cloud_cover" in d else None),
+            output.append("{N}{C}{hh}".format(
+                N  = CloudCover().encode(d["cloud_cover"] if "cloud_cover" in d else None),
                 C  = CloudGenus().encode(d["cloud_genus"] if "cloud_genus" in d else None),
                 hh = self.Height().encode(d["cloud_height"] if "cloud_height" in d else None)
             ))
         return " ".join(output)
-    class CloudCover(CloudCover):
-        _DESCRIPTION = "cloud cover"
     class Height(Observation):
-        _CODE = "hh"
-        _DESCRIPTION = "cloud height"
         _CODE_LEN = 2
         _CODE_TABLE = ct.CodeTable1677
         _UNIT = "m"
 class CloudType(Observation):
     """
     Cloud Types/Amount
-
-    * 8NCCC - Cloud types and base of lowest cloud
     """
-    _CODE = "NCCC"
-    _DESCRIPTION = "cloud types and base of lowest cloud"
     _CODE_LEN = 4
     def _decode(self, group):
         # Get the components
@@ -266,9 +196,9 @@ class CloudType(Observation):
 
         # Initialise data dict
         data = {
-            "low_cloud_type": self.CloudType().decode(CL),
-            "middle_cloud_type": self.CloudType().decode(CM),
-            "high_cloud_type": self.CloudType().decode(CH)
+            "low_cloud_type": self.LowCloud().decode(CL),
+            "middle_cloud_type": self.MiddleCloud().decode(CM),
+            "high_cloud_type": self.HighCloud().decode(CH)
         }
 
         # Add oktas
@@ -291,79 +221,51 @@ class CloudType(Observation):
                 cloud_cover = data[a]
                 break
         return "{N}{CL}{CM}{CH}".format(
-            N =  self.CloudType().encode(cloud_cover),
-            CL = self.CloudType().encode(data["low_cloud_type"] if "low_cloud_type" in data else None),
-            CM = self.CloudType().encode(data["middle_cloud_type"] if "middle_cloud_type" in data else None),
-            CH = self.CloudType().encode(data["high_cloud_type"] if "high_cloud_type" in data else None),
+            N =  self.CloudCover().encode(cloud_cover),
+            CL = self.LowCloud().encode(data["low_cloud_type"] if "low_cloud_type" in data else None),
+            CM = self.MiddleCloud().encode(data["middle_cloud_type"] if "middle_cloud_type" in data else None),
+            CH = self.HighCloud().encode(data["high_cloud_type"] if "high_cloud_type" in data else None),
         )
-    class CloudType(Observation):
-        _CODE = "C"
-        _DESCRIPTION = "cloud type"
-        _CODE_LEN = 1
-        _VALID_RANGE = (0, 9)
     class CloudCover(Observation):
-        _CODE = "N"
-        _DESCRIPTION = "cloud cover"
         _CODE_LEN = 1
         _UNIT = "okta"
+    class LowCloud(SimpleCodeTable):
+        _TABLE = "0513"
+    class MiddleCloud(SimpleCodeTable):
+        _TABLE = "0515"
+    class HighCloud(SimpleCodeTable):
+        _TABLE = "0509"
 class CondensationTrails(Observation):
     """
     Condensation trails
-
-    * 992Nt - condensation trails
     """
     _CODE_LEN = 2
-    def _decode(self, group):
-        N = group[3]
-        t = group[4]
-        return {
-            "trail": self.Trail().decode(N),
-            "time": self.Time().decode(t)
-        }
-    def _encode(self, data, **kwargs):
-        return "{N}{t}".format(
-            N = self.Trail().encode(data["trail"] if "trail" in data else None),
-            t = self.Time().encode(data["time"] if "time" in data else None)
-        )
     class Trail(Observation):
-        _CODE = "N"
-        _DESCRIPTION = "condensation trail"
         _CODE_LEN = 1
-        _VALID_RANGE = (5, 9)
-    class Time(SimpleCodeTable):
-        # TODO: do this as an actual value
-        _CODE = "t"
-        _DESCRIPTION = "time of commencement of a phenomenon before the hour of observation"
+        _CODE_TABLE = ct.CodeTable2752
+    class Time(Observation):
         _CODE_LEN = 1
+        _CODE_TABLE = ct.CodeTable4055
+        _UNIT = "min"
+    _COMPONENTS = [
+        ("trail", 3, 1, Trail),
+        ("time", 4, 1, Time)
+    ]
 class DayDarkness(Observation):
     """
     Day darkness
-
-    * 994AD - day darkness
     """
     _CODE_LEN = 2
-    def _decode(self, group):
-        A = group[3]
-        D = group[4]
-        return {
-            "darkness": self.Darkness().decode(A),
-            "direction": DirectionCardinal().decode(D)
-        }
-    def _encode(self, data, **kwargs):
-        return "{A}{D}".format(
-            A = self.Darkness().encode(data["darkness"] if "darkness" in data else None),
-            D = DirectionCardinal().encode(data["direction"] if "direction" in data else None)
-        )
     class Darkness(Observation):
-        _CODE = "A"
-        _DESCRIPTION = "Day darkness"
         _CODE_LEN = 1
-        _VALID_RANGE = (0, 2)
+        _CODE_TABLE = ct.CodeTable0163
+    _COMPONENTS = [
+        ("darkness", 3, 1, Darkness),
+        ("direction", 4, 1, DirectionCardinal)
+    ]
 class DepositDiameter(Observation):
     """
     Diameter of deposit
-
-    93[34567]RR - diameter of deposit
     """
     _TYPES = [None, None, None, "solid", "glaze", "rime", "compound", "wet_snow"]
     def _decode(self, group):
@@ -390,85 +292,32 @@ class DepositDiameter(Observation):
 class DriftSnow(Observation):
     """
     Drift snow
-
-    * 929Ss - Drift snow
     """
     _CODE_LEN = 2
-    def _decode(self, group):
-        S = group[3]
-        s = group[4]
-
-        return {
-            "phenomena": self.Phenomena().decode(S),
-            "evolution": self.Evolution().decode(s)
-        }
-    def _encode(self, data, **kwargs):
-        return "{S}{s}".format(
-            S = self.Phenomena().encode(data["phenomena"] if "phenomena" in data else None),
-            s = self.Evolution().encode(data["evolution"] if "evolution" in data else None)
-        )
     class Phenomena(SimpleCodeTable):
-        _CODE_LEN = 1
         _TABLE = "3766"
     class Evolution(SimpleCodeTable):
-        _CODE_LEN = 1
         _TABLE = "3776"
         _VALID_RANGE = (0, 7)
+    _COMPONENTS = [
+        ("phenomena", 3, 1, Phenomena),
+        ("evolution", 4, 1, Evolution)
+    ]
 class ExactObservationTime(Observation):
     """
     Exact observation time
-
-    * 9GGgg - Time of observation in hours and minutes and UTC
     """
-    _CODE = "GGgg"
-    _DESCRIPTION = "time of observation in hours and minutes and UTC"
     _CODE_LEN = 4
-    def _decode(self, group):
-        # Get the components
-        GG = group[1:3]
-        gg = group[3:5]
-
-        # Return values
-        return {
-            "hour": self.Hour().decode(GG),
-            "minute": self.Minute().decode(gg)
-        }
-    def _encode(self, data, **kwargs):
-        return "{GG}{gg}".format(
-            GG = self.Hour().encode(data["hour"] if "hour" in data else None),
-            gg = self.Minute().encode(data["minute"] if "minute" in data else None)
-        )
-    class Hour(Hour):
-        _DESCRIPTION = "hour of observation"
-    class Minute(Minute):
-        _DESCRIPTION = "minute of observation"
+    _COMPONENTS = [
+        ("hour", 1, 2, Hour),
+        ("minute", 3, 2, Minute)
+    ]
 class Evapotranspiration(Observation):
     """
     Daily amount of evaporation or evapotranspiration
-
-    * 5EEEi -Amount of evaporation or evapotranspiration
     """
-    _CODE = "EEEi"
-    _DESCRIPTION = "amount of evaporation or evapotranspiration"
     _CODE_LEN = 4
-    def _decode(self, group):
-        # Get state and temperature
-        EEE = group[1:4]
-        i   = group[4:5]
-
-        # Return values
-        return {
-            "amount": self.Amount().decode(EEE),
-            "type": self.TransType().decode(i)
-        }
-    def _encode(self, data, **kwargs):
-        return "{EEE}{i}".format(
-            EEE = self.Amount().encode(data["amount"] if "amount" in data else None),
-            i   = self.TransType().encode(data["type"] if "type" in data else None)
-        )
     class Amount(Observation):
-        _CODE = "EEE"
-        _DESCRIPTION = "amount of evaporation or evapotranspiration"
         _CODE_LEN = 3
         _UNIT = "mm"
         def _decode_convert(self, val):
@@ -476,45 +325,30 @@ class Evapotranspiration(Observation):
         def _encode_convert(self, val):
             return int(val * 10)
     class TransType(Observation):
-        _CODE = "i"
-        _DESCRIPTION = "evaporation type"
         _CODE_LEN = 1
         _CODE_TABLE = ct.CodeTable1806
+    _COMPONENTS = [
+        ("amount", 1, 3, Amount),
+        ("type", 4, 1, TransType)
+    ]
 class FrozenDeposit(Observation):
     """
     Frozen deposit
-
-    * 927ST - frozen deposit
     """
     _CODE_LEN = 2
-    def _decode(self, group):
-        S = group[3]
-        T = group[4]
-
-        return {
-            "deposit": self.Deposit().decode(S),
-            "variation": self.Variation().decode(T)
-        }
-    def _encode(self, data, **kwargs):
-        return "{S}{T}".format(
-            S = self.Deposit().encode(data["deposit"] if "deposit" in data else None),
-            T = self.Variation().encode(data["variation"] if "variation" in data else None)
-        )
-    class Deposit(SimpleCodeTable):
+    class Deposit(Observation):
         _CODE_LEN = 1
-        _TABLE = "3764"
-        _VALID_RANGE = (0, 7)
-    class Variation(SimpleCodeTable):
-        _CODE_LEN = 1
+        _CODE_TABLE = ct.CodeTable3764
+    class Time(SimpleCodeTable):
         _TABLE = "3955"
+    _COMPONENTS = [
+        ("deposit", 3, 1, Deposit),
+        ("variation", 4, 1, Time)
+    ]
 class Geopotential(Observation):
     """
     Geopotential
-
-    * 4ahhh - Geopotential level and height
     """
-    _CODE = "ahhh"
-    _DESCRIPTION = "geopotential level and height"
     _CODE_LEN = 4
     def _decode(self, group):
         a   = group[1]
@@ -568,11 +402,7 @@ class GroundMinimumTemperature(Observation):
     """
     Ground (grass) minimum temperature of the preceding night, in whole degrees Celsius
     (Region I only)
-
-    * 0TT(RR) - Ground (grass) minimum temperature of the preceding night, in whole degrees Celsius
     """
-    _CODE = "TT"
-    _DESCRIPTION = "Ground (grass) minimum temperature of the preceding night"
     _CODE_LEN = 2
     _UNIT = "Cel"
     def _decode_convert(self, val, **kwargs):
@@ -580,7 +410,6 @@ class GroundMinimumTemperature(Observation):
             return int(val)
         elif 50 <= int(val) <= 99:
             return 50 - int(val)
-        # return (int(val) / 10) + (0 if int(val) > 500 else 1000)
     def _encode_convert(self, val, **kwargs):
         if val < 0:
             return val + 50
@@ -589,43 +418,19 @@ class GroundMinimumTemperature(Observation):
 class GroundState(Observation):
     """
     Ground state without snow or measurable ice cover
-
-    * 3EsTT - Ground state and temperature of ground
     """
-    _CODE = "EsTT"
-    _DESCRIPTION = "ground state and temperature of ground"
     _CODE_LEN = 4
-    def _decode(self, group):
-        # Get values
-        E  = group[1:2]
-        s  = group[2:3]
-        TT = group[3:5]
-
-        # Return values
-        return {
-            "state": self.State().decode(E),
-            "temperature": self.Temperature().decode(TT, sign=s)
-        }
-    def _encode(self, data, **kwargs):
-        return "{E}{sTT}".format(
-            E   = self.State().encode(data["state"] if "state" in data else None),
-            sTT = self.Temperature().encode(data["temperature"] if "temperature" in data else None)
-        )
-    class State(Observation):
-        _CODE = "E"
-        _DESCRIPTION = "state of the ground without snow or measurable ice cover"
-        _CODE_LEN = 1
-        _VALID_RANGE = (0, 9)
+    class State(SimpleCodeTable):
+        _TABLE = "0901"
     class Temperature(Observation):
-        _CODE = "TT"
-        _DESCRIPTION = "temperature"
         _CODE_LEN = 3
         _UNIT = "Cel"
         def _decode(self, raw, **kwargs):
-            sign = kwargs.get("sign")
+            sign = raw[0]
             if sign not in ["0", "1"]:
+                raise InvalidCode(sign, "temperature sign")
                 return None
-            return self._decode_value(raw, sign=sign)
+            return self._decode_value(raw[1:3], sign=sign)
         def _decode_convert(self, val, **kwargs):
             factor = 1 if kwargs.get("sign") == "0" else -1
             return val / factor
@@ -634,49 +439,29 @@ class GroundState(Observation):
                 0 if val >= 0 else 1,
                 int(abs(val))
             )
+    _COMPONENTS = [
+        ("state", 1, 1, State),
+        ("temperature", 2, 3, Temperature)
+    ]
 class GroundStateSnow(Observation):
     """
     Ground state with snow or measurable ice cover
-
-    * 4Esss - Ground state and depth of snow
     """
-    _CODE = "Esss"
-    _DESCRIPTION = "ground state and depth of snow"
     _CODE_LEN = 4
-    def _decode(self, group):
-        # Get state and temperature
-        E   = group[1:2]
-        sss = group[2:5]
-
-        # Return values
-        return {
-            "state": self.State().decode(E),
-            "depth": self.Depth().decode(sss)
-        }
-    def _encode(self, data, **kwargs):
-        return "{E}{sss}".format(
-            E   = self.State().encode(data["state"] if "state" in data else None),
-            sss = self.Depth().encode(data["depth"] if "depth" in data else None)
-        )
-    class State(Observation):
-        _CODE = "E"
-        _DESCRIPTION = "state of the ground with snow or measurable ice cover"
-        _CODE_LEN = 1
-        _VALID_RANGE = (0, 9)
+    class State(SimpleCodeTable):
+        _TABLE = "0975"
     class Depth(Observation):
-        _CODE = "sss"
-        _DESCRIPTION = "depth of snow"
         _CODE_LEN = 3
         _CODE_TABLE = ct.CodeTable3889
         _UNIT = "cm"
+    _COMPONENTS = [
+        ("state", 1, 1, State),
+        ("depth", 2, 3, Depth)
+    ]
 class HighestGust(Observation):
     """
     Highest gust
-
-    * 91[01]ff - highest gust
     """
-    _CODE = "91[01]ff"
-    _DESCRIPTION = "highest gust"
     _CODE_LEN = 2
     def _decode(self, group, **kwargs):
         # Get type, speed and direction
@@ -690,7 +475,7 @@ class HighestGust(Observation):
         measure_period = kwargs.get("measure_period")
         data = {
             "speed": self.Gust().decode(ff, unit=kwargs.get("unit")),
-            "direction": self.Direction().decode(dd)
+            "direction": DirectionDegrees().decode(dd)
         }
         if time_before is not None:
             data["time_before_obs"] = time_before
@@ -723,248 +508,118 @@ class HighestGust(Observation):
             # Convert the direction
             if "direction" in d and d["direction"] is not None:
                 output.append("915{dd}".format(
-                    dd = self.Direction().encode(d["direction"])
+                    dd = DirectionDegrees().encode(d["direction"])
                 ))
 
         # Return the codes
         return " ".join(output)
     class Gust(Observation):
-        _CODE = "ff"
-        _DESCRIPTION = "highest gust"
         _CODE_LEN = 2
-    class Direction(DirectionDegrees):
-        _DESCRIPTION = "gust direction"
 class IceAccretion(Observation):
     """
     Ice accretion
-
-    * 6IEER - Ice accretion
     """
-    _CODE = "IEER"
-    _DESCRIPTION = "ice accretion"
     _CODE_LEN = 4
-    def _decode(self, group):
-        # Get the values
-        I  = group[1]
-        EE = group[2:4]
-        R  = group[4]
-
-        # Return data
-        return {
-            "source": self.Source().decode(I),
-            "thickness": self.Thickness().decode(EE),
-            "rate": self.Rate().decode(R)
-        }
-    def _encode(self, data, **kwargs):
-        return "{I}{EE}{R}".format(
-            I  = self.Source().encode(data["source"] if "source" in data else None),
-            EE = self.Thickness().encode(data["thickness"] if "thickness" in data else None),
-            R  = self.Rate().encode(data["rate"] if "rate" in data else None)
-        )
     class Source(Observation):
-        _CODE = "I"
-        _DESCRIPTION = "ice accretion source"
         _CODE_LEN = 1
         _CODE_TABLE = ct.CodeTable1751
     class Thickness(Observation):
-        _CODE = "EE"
-        _DESCRIPTION = "ice accretion thickness"
         _CODE_LEN = 2
         _UNIT = "cm"
     class Rate(Observation):
-        _CODE = "R"
-        _DESCRIPTION = "ice accretion rate"
         _CODE_LEN = 1
-        _VALID_RANGE = (0, 4)
+        _CODE_TABLE = ct.CodeTable3551
+    _COMPONENTS = [
+        ("source", 1, 1, Source),
+        ("thickness", 2, 2, Thickness),
+        ("rate", 4, 1, Rate)
+    ]
 class LocalPrecipitation(Observation):
     """
     Precipitation character and time of precipitation for Region I
-
-    * 0(TT)RR - precipitation character and time of precipitation
     """
-    _CODE = "RR"
-    _DESCRIPTION = "precipitation character and time of precipitation"
     _CODE_LEN = 2
-    def _decode(self, group):
-        return {
-            "character": self.Character().decode(group[0]),
-            "time": self.Time().decode(group[1])
-        }
-    def _encode(self, data, **kwargs):
-        return "{RC}{Rt}".format(
-            RC = self.Character().encode(data["character"] if "character" in data else None),
-            Rt = self.Time().encode(data["time"] if "time" in data else None)
-        )
-    class Character(SimpleCodeTable):
-        _CODE = "R"
+    class Character(Observation):
         _CODE_LEN = 1
-        _DESCRIPTION = "character and intensity of precipitation"
-    class Time(SimpleCodeTable):
-        _CODE = "R"
+        _CODE_TABLE = ct.CodeTable167
+    class Time(Observation):
         _CODE_LEN = 1
-        _DESCRIPTION = "time of beginning or end of precipitation"
+        _CODE_TABLE = ct.CodeTable168
+        _UNIT = "h"
+    _COMPONENTS = [
+        ("character", 0, 1, Character),
+        ("time", 1, 1, Time)
+    ]
 class LowestCloudBase(Observation):
     """
     Lowest cloud base
-
-    * (iRix)h(VV) - Height above surface of the base of the lowest cloud
     """
-    _CODE = "h"
-    _DESCRIPTION = "height above surface of the base of the lowest cloud"
     _CODE_LEN = 1
     _CODE_TABLE = ct.CodeTable1600
     _UNIT = "m"
 class MaxLowCloudConcentration(Observation):
     """
     Location of maximum concentration of low-level clouds
-
-    * 940Cn - evolution of clouds
     """
-    _CODE = "944CD"
-    _DESCRIPTION = "location of maximum concentration of low-level clouds"
     _CODE_LEN = 2
-    def _decode(self, group):
-        # Get values
-        C = group[3]
-        D = group[4]
-
-        # Return data
-        return {
-            "cloud_type": self.CloudType().decode(C),
-            "direction": DirectionCardinal().decode(D)
-        }
-    def _encode(self, data, **kwargs):
-        return "{C}{D}".format(
-            C = self.CloudType().encode(data["cloud_type"] if "cloud_type" in data else None),
-            D = DirectionCardinal().encode(data["direction"] if "direction" in data else None, allow_none=True)
-        )
-    class CloudType(Observation):
-        _CODE = "C"
-        _DESCRIPTION = "cloud type"
-        _CODE_LEN = 1
-        _VALID_RANGE = (0, 9)
+    class CloudType(SimpleCodeTable):
+        _TABLE = "0513"
+    _COMPONENTS = [
+        ("cloud_type", 3, 1, CloudType),
+        ("direction", 4, 1, DirectionCardinal)
+    ]
 class Mirage(Observation):
     """
     Mirage
-
-    * 991AD - Mirage
     """
-    _CODE = "991AD"
-    _DESCRIPTION = "mirage"
     _CODE_LEN = 2
-    def _decode(self, group):
-        # Get values
-        A = group[3]
-        D = group[4]
-
-        # Return data
-        return {
-            "mirage_type": self.MirageType().decode(A),
-            "direction": DirectionCardinal().decode(D)
-        }
-    def _encode(self, data, **kwargs):
-        return "{A}{D}".format(
-            A = self.MirageType().encode(data["mirage_type"] if "mirage_type" in data else None),
-            D = DirectionCardinal().encode(data["direction"] if "direction" in data else None, allow_none=True)
-        )
-    class MirageType(Observation):
-        _CODE = "A"
-        _DESCRIPTION = "mirage type"
-        _CODE_LEN = 1
-        _VALID_RANGE = (0, 8)
+    class MirageType(SimpleCodeTable):
+        _TABLE = "0101"
+    _COMPONENTS = [
+        ("mirage_type", 3, 1, MirageType),
+        ("direction", 4, 1, DirectionCardinal)
+    ]
 class MountainCondition(Observation):
     """
     Cloud conditions over mountains and passes
-
-    * 950Nn - cloud conditions over mountains and passes
     """
-    _CODE = "950Nn"
-    _DESCRIPTION = "cloud conditions over mountains and passes"
     _CODE_LEN = 2
-    def _decode(self, group):
-        # Get codes
-        N = group[3]
-        n = group[4]
-
-        # Decode and return
-        return {
-            "conditions": self.Condition().decode(N),
-            "evolution": self.Evolution().decode(n)
-        }
-    def _encode(self, data, **kwargs):
-        return  "{N}{n}".format(
-            N = self.Condition().encode(data["conditions"] if "conditions" in data else None),
-            n = self.Evolution().encode(data["evolution"] if "evolution" in data else None)
-        )
-    class Condition(Observation):
-        _CODE = "N"
-        _DESCRIPTION = "cloud conditions over mountains and passes"
-        _CODE_LEN = 1
-        _VALID_RANGE = (0, 9)
+    class Condition(SimpleCodeTable):
+        _TABLE = "2745"
     class Evolution(Observation):
-        _CODE = "n"
-        _DESCRIPTION = "cloud evolution"
+        _CODE_TABLE = ct.CodeTable2863
         _CODE_LEN = 1
-        _VALID_RANGE = (0, 9)
+    _COMPONENTS = [
+        ("conditions", 3, 1, Condition),
+        ("evolution", 4, 1, Evolution)
+    ]
 class ObservationTime(Observation):
     """
     Observation time
-
-    * YYGG - day and hour of observation
     """
-    _CODE = "YYGG"
-    _DESCRIPTION = "day and hour of observation"
-    def _decode(self, YYGG):
-        # Get the values
-        YY = YYGG[0:2]
-        GG = YYGG[2:4]
-
-        # Return values
-        return { "day": self.Day().decode(YY), "hour": self.Hour().decode(GG) }
-    def _encode(self, data):
-        return "{YY}{GG}".format(
-            YY = self.Day().encode(data["day"] if "day" in data else None),
-            GG = self.Hour().encode(data["hour"] if "hour" in data else None)
-        )
-    class Day(Day):
-        _DESCRIPTION = "day of observation"
-    class Hour(Hour):
-        _DESCRIPTION = "hour of observation"
+    _CODE_LEN = 4
+    _COMPONENTS = [
+        ("day", 0, 2, Day),
+        ("hour", 2, 2, Hour)
+    ]
 class OpticalPhenomena(Observation):
     """
     Optical phenomena
     """
-    _CODE = "990Zi"
-    _DESCRIPTION = "optical phenomena"
-    def _decode(self, group):
-        # Get the values
-        Z = group[3]
-        i = group[4]
-
-        # Return values
-        return {
-            "phenomena": self.Phenomena().decode(Z),
-            "intensity": self.Intensity().decode(i)
-        }
-    def _encode(self, data, **kwargs):
-        return "{Z}{i}".format(
-            Z = self.Phenomena().encode(data["phenomena"] if "phenomena" in data else None),
-            i = self.Intensity().encode(data["intensity"] if "intensity" in data else None)
-        )
     class Phenomena(Observation):
         _CODE_LEN = 1
         _CODE_TABLE = ct.CodeTable5161
     class Intensity(Observation):
         _CODE_LEN = 1
         _CODE_TABLE = ct.CodeTable1861
+    _COMPONENTS = [
+        ("phenomena", 3, 1, Phenomena),
+        ("intensity", 4, 1, Intensity)
+    ]
 class Precipitation(Observation):
     """
     Precipitation
-
-    * 6RRRt - Precipitation amount
     """
-    _CODE = "RRRt"
-    _DESCRIPTION = "precipitation amount"
     _CODE_LEN = 4
     def _decode(self, group, **kwargs):
         # Check if we're getting tenths of mm
@@ -994,42 +649,31 @@ class Precipitation(Observation):
                 t = self.TimeBeforeObs().encode(data["time_before_obs"] if "time_before_obs" in data else None)
             )
     class Amount(Observation):
-        _CODE = "RRR"
-        _DESCRIPTION = "precipitation amount"
         _CODE_LEN = 3
         _CODE_TABLE = ct.CodeTable3590
         _UNIT = "mm"
     class Amount24(Observation):
-        _CODE = "RRRR"
-        _DESCRIPTION = "precipitation amount"
         _CODE_LEN = 4
         _CODE_TABLE = ct.CodeTable3590A
         _UNIT = "mm"
     class TimeBeforeObs(Observation):
-        _CODE = "t"
-        _DESCRIPTION = "time before precipitation observation"
         _CODE_LEN = 1
         _CODE_TABLE = ct.CodeTable4019
         _UNIT = "h"
 class PrecipitationIndicator(Observation):
     """
     Precipitation indicator
-
-    * iR(ixhVV) - Precipitation indicator
     """
-    _CODE = "iR"
-    _DESCRIPTION = "precipitation indicator"
     _CODE_LEN = 1
-    _VALID_RANGE = (0, 4)
-    def _decode(self, iR, **kwargs):
-        # TODO: codes 6 - 8 are valid if station is Russian
+    def _decode(self, i, **kwargs):
+        country = kwargs.get("country")
         return {
-            "value": int(iR),
-            "in_group_1": True if iR in ["0", "1", "6"] else False,
-            "in_group_3": True if iR in ["0", "2", "7"] else False
+            "value": int(i),
+            "in_group_1": True if (i in ["0", "1"]) or (i == "6" and country == "RU") else False,
+            "in_group_3": True if (i in ["0", "2"]) or (i == "7" and country == "RU") else False
         }
     def _encode(self, data):
-        # todo: include autodetect i.e:
+        # TODO: include autodetect i.e.
         # 0 if precip in section 1 and 3
         # 1 if precip in section 1
         # 2 if precip in section 3
@@ -1049,53 +693,28 @@ class PrecipitationIndicator(Observation):
                 country = kwargs.get("country")
                 if country == "RU" and val in ["6", "7", "8"]:
                     return True
-            return False
         except Exception:
             return False
 class PrecipitationTime(Observation):
     """
     Time at which precipitation given by RRR began or ended and duration and
     character of precipitation
-
-    909Rd - Time and character of precipitation
     """
-    _CODE = "909Rd"
-    _DESCRIPTION = "time and character of precipitation"
     _CODE_LEN = 2
-    def _decode(self, group):
-        # Get values
-        R = group[3]
-        d = group[4]
-
-        # Decode and return
-        return {
-            "time": self.Time().decode(R),
-            "character": self.Character().decode(d)
-        }
-    def _encode(self, data, **kwargs):
-        return "909{R}{d}".format(
-            R = self.Time().encode(data["time"] if "time" in data else None),
-            d = self.Time().encode(data["character"] if "character" in data else None)
-        )
     class Time(Observation):
-        _CODE = "R"
-        _DESCRIPTION = "begin or end time of precipitation"
         _CODE_LEN = 1
         _CODE_TABLE = ct.CodeTable3552
     class Character(Observation):
-        _CODE = "d"
-        _DESCRIPTION = "character of precipitation"
         _CODE_LEN = 1
         _CODE_TABLE = ct.CodeTable0833
+    _COMPONENTS = [
+        ("time", 3, 1, Time),
+        ("character", 4, 1, Character)
+    ]
 class Pressure(Observation):
     """
     Pressure
-
-    * 3PPPP - Station level pressure
-    * 4PPPP - Sea level pressure
     """
-    _CODE = "PPPP"
-    _DESCRIPTION = "pressure"
     _CODE_LEN = 4
     _UNIT = "hPa"
     def _decode_convert(self, val, **kwargs):
@@ -1105,10 +724,8 @@ class Pressure(Observation):
 class PressureChange(Observation):
     """
     Change of surface pressure over the last 24 hours
-
-    * 5[89]ppp - Change of surface pressure
     """
-    _CODE_LEN = 3
+    _CODE_LEN = 4
     def _decode(self, group):
         # Get sign and change
         s   = group[1]
@@ -1139,11 +756,8 @@ class PressureChange(Observation):
 class PressureTendency(Observation):
     """
     Pressure tendency
-
-    * 5appp - Pressure tendency over the past three hours
     """
-    _CODE = "appp"
-    _DESCRIPTION = "pressure tendency over the past three hours"
+    _CODE_LEN = 4
     def _decode(self, group):
         # Get the tendency and the change
         a   = group[1:2]
@@ -1158,14 +772,10 @@ class PressureTendency(Observation):
             a   = self.Tendency().encode(data["tendency"] if "tendency" in data else None),
             ppp = self.Change().encode(data["change"] if "change" in data else None)
         )
-    class Tendency(Observation):
-        _CODE = "a"
-        _DESCRIPTION = "pressure tendency indicator"
-        _CODE_LEN = 1
+    class Tendency(SimpleCodeTable):
+        _TABLE = "0200"
         _VALID_RANGE = (0, 8)
     class Change(Observation):
-        _CODE = "ppp"
-        _DESCRIPTION = "pressure tendency change"
         _CODE_LEN = 3
         _UNIT = "hPa"
         def _decode_convert(self, val, **kwargs):
@@ -1173,17 +783,9 @@ class PressureTendency(Observation):
             return (val / (10.0 if tendency["value"] < 5 else -10.0))
         def _encode_convert(self, val, **kwargs):
             return abs(val * 10)
-class PrevailingWind(DirectionCardinal):
-    """
-    Prevailing wind
-
-    * 7D(ddd) - prevailing wind direction
-    """
 class Radiation(Observation):
     """
     Radiation
-
-    jFFFF - radiation
     """
     _CODE_LEN = 4
     def _decode(self, group, **kwargs):
@@ -1236,22 +838,14 @@ class Region(Observation):
 class RelativeHumidity(Observation):
     """
     Relative humidity
-
-    * 29UUU - relative humidity
     """
-    _CODE = "UUU"
-    _DESCRIPTION = "relative humidity"
     _CODE_LEN = 3
     _VALID_RANGE = (0, 100)
     _UNIT = "%"
 class SeaLandIce(Observation):
     """
     Sea/land ice information
-
-    * ICE cSbDz / text - Ice information
     """
-    _CODE = "ICE xxxxx"
-    _DESCRIPTION = "ice information"
     _CODE_LEN = 5
     _ENCODE_DEFAULT = "ICE /////"
     def _decode(self, group):
@@ -1291,39 +885,25 @@ class SeaLandIce(Observation):
                 D = self.Direction().encode(data["direction"] if "direction" in data else None),
                 z = self.ConditionTrend().encode(data["condition_trend"] if "condition_trend" in data else None),
             )
-    class Concentration(Observation):
-        _CODE = "c"
-        _DESCRIPTION = "concentration or arrangment of sea ice"
+    class Concentration(SimpleCodeTable):
         _CODE_LEN = 1
-        _VALID_RANGE = (0, 9)
-    class Development(Observation):
-        _CODE = "S"
-        _DESCRIPTION = "stage of development"
+        _TABLE = "0639"
+    class Development(SimpleCodeTable):
         _CODE_LEN = 1
-        _VALID_RANGE = (0, 9)
-    class LandOrigin(Observation):
-        _CODE = "b"
-        _DESCRIPTION = "ice of land origin"
+        _TABLE = "3739"
+    class LandOrigin(SimpleCodeTable):
         _CODE_LEN = 1
-        _VALID_RANGE = (0, 9)
+        _TABLE = "0439"
     class Direction(Observation):
-        _CODE = "D"
-        _DESCRIPTION = "bearing of ice edge"
         _CODE_LEN = 1
         _CODE_TABLE = ct.CodeTable0739
-    class ConditionTrend(Observation):
-        _CODE = "z"
-        _DESCRIPTION = "present ice situation and trend of conditions over preceding three hours"
+    class ConditionTrend(SimpleCodeTable):
         _CODE_LEN = 1
-        _VALID_RANGE = (0, 9)
+        _TABLE = "5239"
 class SeaSurfaceTemperature(Observation):
     """
     Sea surface temperature
-
-    * 0sTTT - Sea surface temperature and its type of measurement
     """
-    _CODE = "sTTT"
-    _DESCRIPTION = "sea surface temperature and its type of measurement"
     _CODE_LEN = 4
     def _decode(self, group):
         # Get the values
@@ -1334,12 +914,11 @@ class SeaSurfaceTemperature(Observation):
         m_type = self.MeasurementType().decode(s)
 
         # Return temperature and measurement type
-        # itemp = self.Temperature().decode(TTT, sign=)
         if m_type is None:
             return None
         else:
             sign = 0 if int(m_type["_code"]) % 2 == 0 else 1
-            temp = self.Temperature().decode(TTT, sign=sign)
+            temp = SignedTemperature().decode(TTT, sign=sign)
             if temp is None:
                 temp = { "value": None }
             temp["measurement_type"] = m_type
@@ -1347,28 +926,22 @@ class SeaSurfaceTemperature(Observation):
     def _encode(self, data, **kwargs):
         return "{s}{TTT}".format(
             s   = self.MeasurementType().encode(data["measurement_type"]),
-            TTT = self.Temperature().encode(data, allow_none=True)[1:]
+            TTT = SignedTemperature().encode(data, allow_none=True)[1:]
         )
     class MeasurementType(Observation):
-        _CODE = "s"
-        _DESCRIPTION = "sea surface temperature measurement type"
         _CODE_LEN = 1
         _CODE_TABLE = ct.CodeTable3850
     class Temperature(SignedTemperature):
         _DESCRIPTION = "sea surface temperature"
-class SeaState(SimpleCodeTable):
+class SeaState(Observation):
     """
     State of the sea
-
-    * 924S(V) - state of the sea
     """
     _CODE_LEN = 1
-    _TABLE = "3700"
+    _CODE_TABLE = ct.CodeTable3700
 class SeaVisibility(Observation):
     """
     State of the sea
-
-    * 924(S)V - Visibility seawards (from a coastal station)
     """
     _CODE_LEN = 1
     _CODE_TABLE = ct.CodeTable4300
@@ -1376,11 +949,7 @@ class SeaVisibility(Observation):
 class ShipDisplacement(Observation):
     """
     Ship displacement
-
-    * 222Dv - Direction and speed of displacement of the ship since 3 hours
     """
-    _CODE = "Dv"
-    _DESCRIPTION = "direction and speed of displacement of the ship since 3 hours"
     _CODE_LEN = 2
     def _decode(self, group):
         D = group[3]
@@ -1391,7 +960,7 @@ class ShipDisplacement(Observation):
             return None
 
         return {
-            "direction": self.Direction().decode(D),
+            "direction": DirectionCardinal().decode(D),
             "speed": self.Speed().decode(v)
         }
     def _encode(self, data, **kwargs):
@@ -1400,52 +969,31 @@ class ShipDisplacement(Observation):
             return "00"
         else:
             return "{D}{v}".format(
-                D = self.Direction().encode(data["direction"] if "direction" in data else None, allow_none=True),
+                D = DirectionCardinal().encode(data["direction"] if "direction" in data else None, allow_none=True),
                 v = self.Speed().encode(data["speed"] if "speed" in data else None)
             )
-    class Direction(DirectionCardinal):
-        _DESCRIPTION = "direction of displacement of the ship since 3 hours"
     class Speed(Observation):
-        _CODE = "v"
-        _DESCRIPTION = "speed of displacement of the ship since 3 hours"
         _CODE_LEN = 1
         _CODE_TABLE = ct.CodeTable4451
 class SnowCoverRegularity(Observation):
     """
     Character and regularity of snow cover
-
-    * 928Ss - Character and regularity of snow cover
     """
     _CODE_LEN = 2
-    def _decode(self, group):
-        S = group[3]
-        s = group[4]
-
-        return {
-            "cover": self.Cover().decode(S),
-            "regularity": self.Regularity().decode(s)
-        }
-    def _encode(self, data, **kwargs):
-        return "{S}{s}".format(
-            S = self.Cover().encode(data["cover"] if "cover" in data else None),
-            s = self.Regularity().encode(data["regularity"] if "regularity" in data else None)
-        )
-    class Cover(SimpleCodeTable):
+    class Cover(Observation):
         _CODE_LEN = 1
-        _TABLE = "3765"
-        _VALID_RANGE = (0, 8)
-    class Regularity(SimpleCodeTable):
+        _CODE_TABLE = ct.CodeTable3765
+    class Regularity(Observation):
         _CODE_LEN = 1
-        _TABLE = "3775"
-        _VALID_RANGE = (0, 8)
+        _CODE_TABLE = ct.CodeTable3775
+    _COMPONENTS = [
+        ("cover", 3, 1, Cover),
+        ("regularity", 4, 1, Regularity)
+    ]
 class SnowFall(Observation):
     """
     Snow fall
-
-    * 931ss - depth of newly fallen snow
     """
-    _CODE = "931ss"
-    _DESCRIPTION = "depth of newly fallen snow"
     _CODE_LEN = 2
     def _decode(self, group, **kwargs):
         # Get depth
@@ -1462,36 +1010,20 @@ class SnowFall(Observation):
             ss = self.Amount().encode(data["amount"] if "amount" in data else None)
         )
     class Amount(Observation):
-        _CODE = "931ss"
-        _DESCRIPTION = "depth of newly fallen snow"
         _CODE_LEN = 2
         _CODE_TABLE = ct.CodeTable3870
 class SpecialClouds(Observation):
     """
     Special clouds
-
-    * 993CD - Special clouds
     """
     _CODE_LEN = 2
-    def _decode(self, group):
-        C = group[3]
-        D = group[4]
-
-        return {
-            "cloud_type": self.CloudType().decode(C),
-            "direction": self.Direction().decode(D)
-        }
-    def _encode(self, data, **kwargs):
-        return "{C}{d}".format(
-            C = self.CloudType().encode(data["cloud_type"] if "cloud_type" in data else None),
-            d = self.Direction().encode(data["direction"] if "direction" in data else None, allow_none=True)
-        )
     class CloudType(SimpleCodeTable):
         _CODE_LEN = 1
-        _TABLE = "0521"
-        _VALID_RANGE = (1, 5)
-    class Direction(DirectionCardinal):
-        _DESCRIPTION = "true direction in which orographic clouds or clouds with vertical development are seen"
+        _CODE_TABLE = ct.CodeTable0521
+    _COMPONENTS = [
+        ("cloud_type", 3, 1, CloudType),
+        ("direction", 4, 1, DirectionCardinal)
+    ]
 class StationID(Observation):
     """
     Station ID
@@ -1506,9 +1038,6 @@ class StationID(Observation):
 class StationPosition(Observation):
     """
     Station position
-
-    * 99LLL QLLLL - Latitude, globe quadrant and longitude
-    * MMMUU hhhhi - Mobile land station position
     """
     def _decode(self, raw):
         # Check we have a valid number of raw groups
@@ -1593,8 +1122,6 @@ class StationPosition(Observation):
         # Return the data
         return " ".join(groups)
     class Latitude(Observation):
-        _CODE = "LaLaLa"
-        _DESCRIPTION = "latitude"
         def _decode(self, raw, **kwargs):
             quadrant = kwargs.get("quadrant")
             return "{:.1f}".format(int(raw) / (-10.0 if quadrant in ["3", "5"] else 10.0))
@@ -1602,8 +1129,6 @@ class StationPosition(Observation):
             quadrant = kwargs.get("quadrant")
             return int(float(data) * (-10.0 if quadrant in ["3", "5"] else 10.0))
     class Longitude(Observation):
-        _CODE = "LoLoLoLo"
-        _DESCRIPTION = "longitude"
         def _decode(self, raw, **kwargs):
             quadrant = kwargs.get("quadrant")
             return "{:.1f}".format(int(raw) / (-10.0 if quadrant in ["5", "7"] else 10.0))
@@ -1611,8 +1136,6 @@ class StationPosition(Observation):
             quadrant = kwargs.get("quadrant")
             return int(float(data) * (-10.0 if quadrant in ["5", "7"] else 10.0))
     class MarsdenSquare(Observation):
-        _CODE = "MMM"
-        _DESCRIPTION = "Marsden square"
         _CODE_LEN = 3
         def _decode(self, raw):
             return int(raw)
@@ -1624,8 +1147,6 @@ class StationPosition(Observation):
             else:
                 return True
     class Elevation(Observation):
-        _CODE = "h0h0h0h0"
-        _DESCRIPTION = "elevation"
         _CODE_LEN = 4
         def _decode(self, raw, **kwargs):
             unit = kwargs.get("unit")
@@ -1633,8 +1154,6 @@ class StationPosition(Observation):
         def _encode(self, data):
             return self._encode_value(data)
     class Confidence(Observation):
-        _CODE = "im"
-        _DESCRIPTION = "confidence"
         _CODE_LEN = 1
         _CONFIDENCE = ["Poor", "Excellent", "Good", "Fair"]
         def _decode(self, raw, **kwargs):
@@ -1666,11 +1185,7 @@ class StationType(Observation):
 class SuddenHumidityChange(Observation):
     """
     Sudden rise/fall in relative humidity
-
-    * 99[89]UU - sudden rise/fall in relative humidity
     """
-    _CODE = "9[89]UU"
-    _DESCRIPTION = "sudden rise/fall in relative humidity"
     _CODE_LEN = 2
     _UNIT = "%"
     def _decode_convert(self, val):
@@ -1682,11 +1197,7 @@ class SuddenHumidityChange(Observation):
 class SuddenTemperatureChange(Observation):
     """
     Sudden rise/fall in air temperature
-
-    * 99[67]TT - sudden rise/fall in air temperature
     """
-    _CODE = "9[67]TT"
-    _DESCRIPTION = "sudden rise/fall in air temperature"
     _CODE_LEN = 2
     _UNIT = "Cel"
     def _decode_convert(self, val):
@@ -1698,11 +1209,7 @@ class SuddenTemperatureChange(Observation):
 class SurfaceWind(Observation):
     """
     Surface wind
-
-    * (N)ddff - Surface wind direction and speed
     """
-    _CODE = "ddff"
-    _DESCRIPTION = "surface wind direction and speed"
     _CODE_LEN = 4
     def _decode(self, ddff):
         # Get direction and speed
@@ -1710,7 +1217,7 @@ class SurfaceWind(Observation):
         ff = ddff[2:4]
 
         # Get direction and speed
-        direction = self.Direction().decode(dd)
+        direction = DirectionDegrees().decode(dd)
         speed = self.Speed().decode(ff)
 
         # Perform sanity check - if the wind is calm, it can't have a speed
@@ -1724,14 +1231,10 @@ class SurfaceWind(Observation):
         }
     def _encode(self, data, **kwargs):
         return "{dd}{ff}".format(
-            dd = self.Direction().encode(data["direction"] if "direction" in data else None, allow_none=True),
+            dd = DirectionDegrees().encode(data["direction"] if "direction" in data else None, allow_none=True),
             ff = self.Speed().encode(data["speed"] if "speed" in data else None)
         )
-    class Direction(DirectionDegrees):
-        _DESCRIPTION = "surface wind direction"
     class Speed(Observation):
-        _CODE = "ff"
-        _DESCRIPTION = "surface wind speed"
         _CODE_LEN = 2
         def encode(self, data, **kwargs):
             if data is not None and data["value"] > 99:
@@ -1741,11 +1244,7 @@ class SurfaceWind(Observation):
 class Sunshine(Observation):
     """
     Amount of sunshine
-
-    * 5[0123]SS - Amount of sunshine
     """
-    _CODE = "SSS"
-    _DESCRIPTION = "amount of sunshine"
     _CODE_LEN = 3
     def _decode(self, group):
         # Get sunshine
@@ -1776,8 +1275,6 @@ class Sunshine(Observation):
             )
         )
     class Amount(Observation):
-        _CODE = "SSS"
-        _DESCRIPTION = "amount of sunshine"
         _CODE_LEN = 3
         _UNIT = "h"
         def _encode(self, data, **kwargs):
@@ -1795,12 +1292,7 @@ class Sunshine(Observation):
 class SwellWaves(Observation):
     """
     Swell waves
-
-    * 3dddd - Direction of swell eaves
-    * 4PPHH - Period and height of first swell waves
-    * 5PPHH - Period and height of second swell waves
     """
-    _DESCRIPTION = "direction, period and height of swell waves"
     def _decode(self, group, **kwargs):
         # Split group into separate groups
         (dir_group, info_group) = group.split(" ")
@@ -1840,19 +1332,13 @@ class SwellWaves(Observation):
         output.extend([w for w in waves if w is not None])
         return " ".join(output)
     class Direction(Observation):
-        _CODE = "dd"
-        _DESCRIPTION = "direction of swell waves"
         _CODE_LEN = 2
         _CODE_TABLE = ct.CodeTable0877
         _UNIT = "deg"
     class Period(Observation):
-        _CODE = "PP"
-        _DESCRIPTION = "period of swell waves"
         _CODE_LEN = 2
         _UNIT = "s"
     class Height(Observation):
-        _CODE = "HH"
-        _DESCRIPTION = "height of swell waves"
         _CODE_LEN = 2
         _UNIT = "m"
         def _decode_convert(self, val, **kwargs):
@@ -1862,12 +1348,7 @@ class SwellWaves(Observation):
 class Temperature(Observation):
     """
     Temperature observation
-
-    * 1sTTT - air temperature
-    * 2sTTT - dewpoint temperature
     """
-    _CODE = "sTTT"
-    _DESCRIPTION = "temperature"
     _CODE_LEN = 4
     def _decode(self, group):
         # Get the sign (sn) and temperature (TTT):
@@ -1891,8 +1372,6 @@ class Temperature(Observation):
 class TimeBeforeObs(Observation):
     """
     Time before observation
-
-    907tt - Time before observation
     """
     _CODE_LEN = 2
     _CODE_TABLE = ct.CodeTable4077T
@@ -1905,44 +1384,30 @@ class TimeOfEnding(Observation):
 class VariableLocationIntensity(Observation):
     """
     Variability, location or intensity
-
-    900zz - Variability, location or intensity
     """
     _CODE_LEN = 2
     _CODE_TABLE = ct.CodeTable4077Z
 class ValleyClouds(Observation):
     """
     Fog, mist or low cloud in valleys or plains, observed from a station at a higher level
-
-    951Nn - fog, mist or low cloud in valleys or plains, observed from a station at a higher level
     """
     _CODE_LEN = 2
-    def _decode(self, group):
-        N = group[3]
-        n = group[4]
-        return {
-            "condition": self.Condition().decode(N),
-            "evolution": self.Evolution().decode(n)
-        }
-    def _encode(self, data, **kwargs):
-        return "{N}{n}".format(
-            N = self.Condition().encode(data["condition"] if "condition" in data else None),
-            n = self.Evolution().encode(data["evolution"] if "evolution" in data else None)
-        )
     class Condition(SimpleCodeTable):
         _CODE_LEN = 1
-        _TABLE = "2754"
+        _CODE_TABLE = ct.CodeTable2754
     class Evolution(SimpleCodeTable):
         _CODE_LEN = 1
-        _TABLE = "2864"
+        _CODE_TABLE = ct.CodeTable2864
+    _COMPONENTS = [
+        ("condition", 3, 1, Condition),
+        ("evolution", 4, 1, Evolution)
+    ]
 class VisibilityDirection(Observation):
     """
     Visiblity in a direction
 
     98xxx - Visibility in a direction
     """
-    _CODE = "dVV"
-    _DESCRIPTION = "visibility in a direction"
     _CODE_LEN = 3
     def _decode(self, group):
         # Get direction and visibility
@@ -1951,8 +1416,13 @@ class VisibilityDirection(Observation):
 
         # If direction code is 9, it's variable visibility
         if dir == "9":
-            logging.warning("989VV to be coded separately")
-            return None
+            direction = DirectionCardinal().decode(vis[0])["value"]
+            if direction is None:
+                direction = "towardsSea"
+            return {
+                "direction": { "value": direction },
+                "variation": self.Variation().decode(vis[1])
+            }
 
         # If direction code is 0, it's towards the sea
         direction = DirectionCardinal().decode(dir)["value"]
@@ -1965,18 +1435,22 @@ class VisibilityDirection(Observation):
             "visibility": Visibility().decode(vis)
         }
     def _encode(self, data, **kwargs):
-        return "{d}{VV}".format(
-            d  = DirectionCardinal().encode(data["direction"] if "direction" in data else None),
-            VV = Visibility().encode(data["visibility"] if "visibility" in data else None)
-        )
+        if "variation" in data:
+            return "9{d}{V}".format(
+                d = DirectionCardinal().encode(data["direction"] if "direction" in data else None),
+                V = self.Variation().encode(data["variation"] if "variation" in data else None)
+            )
+        else:
+            return "{d}{VV}".format(
+                d  = DirectionCardinal().encode(data["direction"] if "direction" in data else None),
+                VV = Visibility().encode(data["visibility"] if "visibility" in data else None)
+            )
+    class Variation(SimpleCodeTable):
+        _TABLE = "4332"
 class Weather(Observation):
     """
     Weather
-
-    * 7wwWW - Present and past weather
     """
-    _CODE = "wwWW"
-    _DESCRIPTION = "present and past weather"
     _CODE_LEN = 2
     def _decode(self, group, **kwargs):
         time_before = kwargs.get("time_before")
@@ -2005,11 +1479,7 @@ class Weather(Observation):
 class WeatherIndicator(Observation):
     """
     Weather indicator
-
-    * (iR)ix(hVV) - Weather indicator
     """
-    _CODE = "ix"
-    _DESCRIPTION = "weather indicator"
     _CODE_LEN = 1
     _VALID_RANGE = (1, 7)
     def _decode(self, ix):
@@ -2020,11 +1490,7 @@ class WeatherIndicator(Observation):
 class WetBulbTemperature(Observation):
     """
     Wet bulb temperature
-
-    * 8sTTT - Wet bulb temperature
     """
-    _CODE = "sTTT"
-    _DESCRIPTION = "wet bulb temperature"
     _CODE_LEN = 4
     def _decode(self, group):
         # Get values
@@ -2049,8 +1515,6 @@ class WetBulbTemperature(Observation):
             TTT = self.Temperature().encode(data)
         )
     class Status(Observation):
-        _CODE = "s"
-        _DESCRIPTION = "sign and type of wet bulb temperature"
         _CODE_LEN = 1
         _CODE_TABLE = ct.CodeTable3855
     class Temperature(Observation):
@@ -2069,11 +1533,7 @@ class WetBulbTemperature(Observation):
 class WindIndicator(Observation):
     """
     Wind indicator
-
-    * iw - Indicator for source and units of wind speed
     """
-    _CODE = "iw"
-    _DESCRIPTION = "indicator for source and units of wind speed"
     _CODE_LEN = 1
     _VALID_REGEXP = "[0134/]$"
     def _decode(self, iw):
@@ -2088,13 +1548,7 @@ class WindIndicator(Observation):
 class WindWaves(Observation):
     """
     Wind waves
-
-    * 1PPHH - Period and height of waves (instrumental)
-    * 2PPHH - Period and height of waves
-    * 70HHH - Height of waves (instrumental)
     """
-    _CODE = "PPHH"
-    _DESCRIPTION = "period and height of wind waves"
     _CODE_LEN = 4
     def _decode(self, group, **kwargs):
         # Get group
@@ -2155,13 +1609,9 @@ class WindWaves(Observation):
                 )
         return None
     class Period(Observation):
-        _CODE = "PP"
-        _DESCRIPTION = "period of wind waves"
         _CODE_LEN = 2
         _UNIT = "s"
     class Height(Observation):
-        _CODE = "HH"
-        _DESCRIPTION = "height of wind waves"
         _CODE_LEN = 2
         _UNIT = "m"
         def _decode_convert(self, val, **kwargs):

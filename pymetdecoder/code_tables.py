@@ -51,7 +51,10 @@ class CodeTable(object):
         Decodes raw value into observation value(s)
         """
         try:
-            return self._decode(value, **kwargs)
+            table = {}
+            if hasattr(self, "_TABLE"):
+                table["_table"] = self._TABLE
+            return { **table, **self._decode(value, **kwargs) }
         except NotImplementedError as e:
             logging.error(str(e))
             sys.exit(1)
@@ -134,6 +137,8 @@ class CodeTableLookup(CodeTableSimple):
     """
     Simple code table for returning a value from a list of possible values
     """
+    def __init__(self, **kwargs):
+        pass
     def _decode(self, i):
         if self._VALUES[int(i)] is None:
             raise ValueError(i)
@@ -151,6 +156,7 @@ class CodeTable0161(CodeTable):
     WMO Regional Association area in which buoy, drilling rig or oil- or gas-production
     platform has been deployed
     """
+    _TABLE = "0161"
     _REGIONS = [None, "I", "II", "III", "IV", "V", "VI", "Antarctic"]
     def _decode(self, A1):
         # Check if given region is valid
@@ -160,21 +166,42 @@ class CodeTable0161(CodeTable):
             raise ValueError(A1)
     def _encode(self, data):
         return(self._REGIONS.index(data))
+class CodeTable0163(CodeTableLookup):
+    """
+    Day darkness, worst in direction D
+    """
+    _TABLE = "0163"
+    _VALUES = ["Bad", "Very bad", "black"]
 class CodeTable0264(CodeTableLookup):
     """
     Standard isobaric surface for which the geopotential is reported
     """
+    _TABLE = "0264"
     _VALUES = [None, 1000, 925, None, None, 500, None, 700, 850]
     _UNIT = "hPa"
 class CodeTable0500(CodeTableLookup):
     """
     Genus of cloud
     """
+    _TABLE = "0500"
     _VALUES = ["Ci", "Cc", "Cs", "Ac", "As", "Ns", "Sc", "St", "Cu", "Cb"]
+class CodeTable0521(CodeTableLookup):
+    """
+    Genus of cloud
+    """
+    _TABLE = "0521"
+    _VALUES = [None,
+        "Nacreous clouds",
+        "Noctilucent clouds",
+        "Clouds from waterfalls",
+        "Clouds from fires",
+        "Clouds from volcanic eruptions"
+    ]
 class CodeTable0700(CodeTable):
     """
     Direction or bearing in one figure
     """
+    _TABLE = "0700"
     _DIRECTIONS = [None, "NE", "E", "SE", "S", "SW", "W", "NW", "N", None]
     def _decode(self, D):
         if D == "/":
@@ -206,6 +233,7 @@ class CodeTable0739(CodeTable):
     """
     True bearing of principle ice edge
     """
+    _TABLE = "0739"
     _DIRECTIONS = [None, "NE", "E", "SE", "S", "SW", "W", "NW", "N", None]
     def _decode(self, Di):
         if Di == "/":
@@ -231,6 +259,7 @@ class CodeTable0833(CodeTable):
     """
     Duration and character of precipitation given by RRR
     """
+    _TABLE = "0833"
     _RANGE = [
         (0, 1), (1, 3), (3, 6), (6, None)
     ]
@@ -253,6 +282,7 @@ class CodeTable0877(CodeTable):
     """
     True direction, in tens of degrees, from which wind is blowing
     """
+    _TABLE = "0877"
     def _decode(self, dd):
         calm = False
         varAllUnknown = False
@@ -282,6 +312,7 @@ class CodeTable1004(CodeTable):
     Elevation angle of the top of the cloud indicated by C
     Elevation angle of the top of the phenomenon above horizon
     """
+    _TABLE = "1004"
     _ANGLES = [None, 45, 30, 20, 15, 12, 9, 7, 6, 5]
     def _decode(self, e):
         (value, quantifier, visible) = (None, None, True)
@@ -303,6 +334,7 @@ class CodeTable1600(CodeTable):
     """
     Height above surface of the base of the lowest cloud
     """
+    _TABLE = "1600"
     _RANGES = [
         (0, 50),(50, 100),(100, 200),(200, 300),(300, 600),(600, 1000),
         (1000, 1500),(1500, 2000),(2000, 2500),(2500, None)
@@ -320,6 +352,7 @@ class CodeTable1677(CodeTable):
     """
     Height of base of cloud layer
     """
+    _TABLE = "1677"
     _RANGE90 = [
         (0, 50), (50, 100), (100, 200), (200, 300), (300, 600),
         (600, 1000), (1000, 1500), (1500, 2000), (2000, 2500), (2500, float("inf"))
@@ -381,6 +414,7 @@ class CodeTable1751(CodeTable):
     """
     Ice accretion on ships
     """
+    _TABLE = "1751"
     _VALUES = [None,
         { "spray": True,  "fog": False, "rain": False },
         { "spray": False, "fog": True,  "rain": False },
@@ -416,11 +450,13 @@ class CodeTable1861(CodeTableLookup):
     """
     Intensity of the phenomena
     """
+    _TABLE = "1861"
     _VALUES = ["Slight", "Moderate", "Heavy or strong"]
 class CodeTable2700(CodeTable):
     """
     Total cloud cover
     """
+    _TABLE = "2700"
     def _decode(self, N):
         if int(N) == 9:
             return { "value": None, "obscured": True, "unit": "okta" }
@@ -435,10 +471,79 @@ class CodeTable2700(CodeTable):
                 raise Exception
         else:
             return str(data["value"])
+class CodeTable2752(CodeTableLookup):
+    """
+    Condensation trails
+    """
+    _TABLE = "2752"
+    _VALUES = [None, None, None, None, None,
+        "Non-persistent",
+        "Persistent, covering less than 1/8 of the sky",
+        "Persistent, covering 1/8 of the sky",
+        "Persistent, covering 2/8 of the sky",
+        "Persistent, covering 3/8 or more of the sky"
+    ]
+class CodeTable2754(CodeTableLookup):
+    """
+    Cloud conditions observed from a higher level
+    """
+    _TABLE = "2754"
+    _VALUES = [
+        "No cloud or mist",
+        "Mist, clear above",
+        "Fog patches",
+        "Layer of slight fog",
+        "Layer of thick fog",
+        "Some isolated clouds",
+        "Isolated clouds and fog below",
+        "Many isolated clouds",
+        "Sea of clouds",
+        "Bad visibility obscuring the downward view"
+    ]
+class CodeTable2863(CodeTableLookup):
+    """
+    Evolution of clouds
+    """
+    _TABLE = "2863"
+    _VALUES = [
+        "No change", "Cumulification", "Slow elevation", "Rapid elevation",
+        "Elevation and stratification", "Slow lowering", "Rapid lowering",
+        "Stratification", "Stratification and lowering", "Rapid change"
+    ]
+class CodeTable2864(CodeTableLookup):
+    """
+    Evolution of clouds observed from a station at a higher level
+    """
+    _TABLE = "2864"
+    _VALUES = [
+        "No change",
+        "Decrease and elevation",
+        "Decrease",
+        "Elevation",
+        "Decrease and lowering",
+        "Increase and elevation",
+        "Lowering",
+        "Increase",
+        "Increase and lowering",
+        "Intermittent fog at the station"
+    ]
+class CodeTable3551(CodeTableLookup):
+    """
+    Rate of ice accretion on ships
+    """
+    _TABLE = "3551"
+    _VALUES = [
+        "Ice not building up",
+        "Ice building up slowly",
+        "Ice building up rapidly",
+        "Ice melting or breaking up slowly",
+        "Ice melting or breaking up rapidly"
+    ]
 class CodeTable3552(CodeTable):
     """
     Time at which precipitation given by RRR began or ended
     """
+    _TABLE = "3552"
     _RANGE = [None,
         (0, 1), (1, 2), (2, 3), (3, 4), (4, 5), (5, 6), (6, 12), (12, None)
     ]
@@ -461,6 +566,7 @@ class CodeTable3570(CodeTable):
     Amount of precipitation or water equivalent of solid precipitation, or diameter
     of solid deposit
     """
+    _TABLE = "3570"
     def _decode(self, RR):
         RR = int(RR)
         output = {
@@ -488,6 +594,7 @@ class CodeTable3590(CodeTable):
     """
     Amount of precipitation which has fallen during the reporting period
     """
+    _TABLE = "3590"
     def _decode(self, RRR):
         RRR = int(RRR)
         if RRR <= 988:
@@ -518,6 +625,7 @@ class CodeTable3590A(CodeTable):
     """
     Amount of precipitation which has fallen during 24 hour period
     """
+    _TABLE = "3590"
     def _decode(self, RRRR):
         RRRR = int(RRRR)
         if RRRR <= 9998:
@@ -542,10 +650,56 @@ class CodeTable3590A(CodeTable):
         else:
             val = data["value"]
         return str("{:04d}".format(int(val)))
+class CodeTable3700(CodeTableLookup):
+    """
+    State of the sea
+    """
+    _TABLE = "3700"
+    _VALUES = [
+        "Calm (glassy)", "Calm (rippled)", "Smooth (wavelets)", "Slight",
+        "Moderate", "Rough", "Very rough", "High", "Very high", "Phenomenal"
+    ]
+class CodeTable3764(CodeTableLookup):
+    """
+    Type of frozen deposit
+    """
+    _TABLE = "3764"
+    _VALUES = [
+        "Glaze", "Soft rime", "Hard rime", "Snow deposit", "Wet snow deposit",
+        "Freezing wet snow deposit", "Compound deposits", "Ground ice"
+    ]
+class CodeTable3765(CodeTableLookup):
+    """
+    Character of snow cover
+    """
+    _TABLE = "3765"
+    _VALUES = [
+        "Light fresh snow", "Fresh snow blown into drifts", "Fresh compact snow",
+        "Old snow, loose", "Old snow, firm", "Old snow, moist",
+        "Loose snow, with surface crust", "Firm snow, with surface crust",
+        "Moist snow, with surface crust"
+    ]
+class CodeTable3775(CodeTableLookup):
+    """
+    Regularity of snow cover
+    """
+    _TABLE = "3775"
+    _VALUES = [
+        "Even snow cover, ground frozen, no drifts",
+        "Even snow cover, ground soft, no drifts",
+        "Even snow cover, state of ground unknown, no drifts",
+        "Snow cover moderately uneven, ground frozen, slight drifts",
+        "Snow cover moderately uneven, ground soft, slight drifts",
+        "Snow cover moderately uneven, state of ground unknown, slight drifts",
+        "Snow cover very uneven, ground frozen, deep drifts",
+        "Snow cover very uneven, ground soft, deep drifts",
+        "Snow cover very uneven, state of ground unknown, deep drifts"
+    ]
 class CodeTable3850(CodeTable):
     """
     Indicator for sign and type of measurement of sea surface temperature
     """
+    _TABLE = "3850"
     _METHODS = ["Intake", "Bucket", "Hull contact sensor", "Other"]
     def _decode(self, ss):
         if ss == "/":
@@ -574,6 +728,7 @@ class CodeTable3855(CodeTable):
     """
     Indicator for the sign and type of wet-bulb temperature reported
     """
+    _TABLE = "3855"
     _OUTPUTS = [
         { "sign":    1, "measured":  True, "iced": False },
         { "sign":   -1, "measured":  True, "iced": False },
@@ -610,6 +765,8 @@ class CodeTable3870(CodeTable):
     """
     Depth of newly fallen snow
     """
+    _TABLE = "3870"
+    _UNIT = "mm"
     def _decode(self, ss):
         ss = int(ss)
         (val, quantifier, inaccurate) = (None, None, False)
@@ -630,7 +787,7 @@ class CodeTable3870(CodeTable):
         else:
             raise Exception
         return {
-            "value": val, "quantifier": quantifier, "inaccurate": inaccurate, "unit": "mm"
+            "value": val, "quantifier": quantifier, "inaccurate": inaccurate, "unit": self._UNIT
         }
     def _encode(self, data):
         pass
@@ -638,6 +795,7 @@ class CodeTable3889(CodeTable):
     """
     Total depth of snow
     """
+    _TABLE = "3889"
     def _decode(self, sss):
         output = {
             "depth": None, "quantifier": None, "continuous": True, "impossible": False
@@ -670,12 +828,28 @@ class CodeTable4019(CodeTableLookup):
     """
     Duration of period of reference for amount of precipitation, ending at the time of the report
     """
+    _TABLE = "4019"
     _VALUES = [None, 6, 12, 18, 24, 1, 2, 3, 9, 15]
     _UNIT = "h"
+class CodeTable4055(CodeTable):
+    """
+    Time of commencement of a phenomenon before the hour of observation
+    """
+    _TABLE = "4055"
+    _RANGES = [
+        (0, 30),(30, 60),(60, 90),(90, 120),(120, 150),(150, 180),
+        (180, 210),(210, 240),(240, 300),(300, 360)
+    ]
+    def _decode(self, h):
+        (min, max) = self.decode_range(int(h))
+        return { "min": min, "max": max, "unit": "min" }
+    def _encode(self, data):
+        return self.encode_range(data)
 class CodeTable4077T(CodeTable):
     """
     Time before observation or duration of phenomena
     """
+    _TABLE = "4077"
     def _decode(self, t):
         t = int(t)
         if 0 <= t <= 60:
@@ -689,6 +863,7 @@ class CodeTable4077Z(CodeTable):
     """
     Variation, location or intensity of phenomena
     """
+    _TABLE = "4077"
     def _decode(self, z):
         z = int(z)
         if 76 <= z <= 99:
@@ -702,10 +877,12 @@ class CodeTable4300(CodeTable):
     Visibility seawards (from a coastal station)
     Visibility over the water surface of an alighting area
     """
+    _TABLE = "4300"
     _RANGES = [
         (0, 50), (50, 200), (200, 500), (500, 1000), (1000, 2000), (2000, 4000),
         (4000, 10000), (10000, 20000), (20000, 50000), (50000, None)
     ]
+    _UNIT = "m"
     def _decode(self, V):
         (min, max) = self.decode_range(int(V))
         quantifier = None
@@ -718,6 +895,7 @@ class CodeTable4377(CodeTable):
     """
     Horizontal visibility at surface
     """
+    _TABLE = "4377"
     _RANGE90 = [
         (0, 50), (50, 200), (200, 500), (500, 1000), (1000, 2000),
         (2000, 4000), (4000, 10000), (10000, 20000), (20000, 50000), (50000, float("inf"))
@@ -787,6 +965,7 @@ class CodeTable4451(CodeTable):
     """
     Ship's average speed made good during the three hours preceding the time of observation
     """
+    _TABLE = "4451"
     _KT_RANGE  = [
         (0, 0), (1, 5), (6, 10), (11, 15), (16, 20), (21, 25), (26, 30),
         (31, 35), (36, 40)
@@ -836,8 +1015,48 @@ class CodeTable5161(CodeTableLookup):
     """
     Optical phenomena
     """
+    _TABLE = "5161"
     _VALUES = [
         "Brocken spectre", "Rainbow", "Solar or lunar halo", "Parhelia or anthelia",
         "Sun pillar", "Corona", "Twilight glow", "Twilight glow on the mountains",
         "Mirage", "Zodiacal light"
     ]
+################################################################################
+# REGION SPECIFIC CODE ABLES
+################################################################################
+# Region I
+class CodeTable167(CodeTableLookup):
+    """
+    Character and intensity of precipitation
+    """
+    _TABLE = "167"
+    _VALUES = [
+        "No precipitation",
+        "Light intermittent",
+        "Moderate intermittent",
+        "Heavy intermittent",
+        "Very heavy intermittent",
+        "Light continuous",
+        "Moderate continuous",
+        "Heavy continuous",
+        "Very heavy continuous",
+        "Variable - alternatively light and heavy"
+    ]
+class CodeTable168(CodeTable):
+    """
+    Time of beginning or end of precipitation
+    """
+    _TABLE = "168"
+    _RANGE = [
+        None, (0, 1), (1, 2), (2, 3), (3, 4), (4, 5), (5, 6), (6, 8), (8, 10), (10, None)
+    ]
+    def _decode(self, R):
+        R = int(R)
+        (min, max, quantifier) = (None, None, None)
+        if R == 0:
+            return None
+        else:
+            (min, max) = self._RANGE[R]
+            if max is None:
+                quantifier = "isGreater"
+        return { "min": min, "max": max, "quantifier": quantifier, "unit": "h" }

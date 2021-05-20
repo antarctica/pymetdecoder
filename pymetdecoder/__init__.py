@@ -128,7 +128,7 @@ class Observation(object):
 
             # If value is None, return default. Otherwise, return encoded value
             allow_none = kwargs.get("allow_none", False)
-            if not allow_none:
+            if not allow_none and not hasattr(self, "_CODE_TABLE"):
                 if raw is None:
                     val = self._ENCODE_DEFAULT
                 elif isinstance(raw, dict) and "value" in raw and raw["value"] is None:
@@ -149,7 +149,7 @@ class Observation(object):
         except conversion.ConversionError as e:
             logging.warning(str(e))
         except Exception as e:
-            # print(str(e))
+            print(str(e))
             logging.warning("No valid {}. Using {}".format(type(self).__name__, self._ENCODE_DEFAULT))
             if "group" in kwargs:
                 return "{}{}".format(kwargs.get("group"), self._ENCODE_DEFAULT)
@@ -159,13 +159,25 @@ class Observation(object):
         """
         Actual decode function. Mostly implemented in subclasses
         """
-        return self._decode_value(raw, **kwargs)
+        if not hasattr(self, "_COMPONENTS"):
+            return self._decode_value(raw, **kwargs)
+        else:
+            retval = {}
+            for x in self._COMPONENTS:
+                retval[x[0]] = x[3]().decode(raw[x[1]:x[1] + x[2]])
+            return retval
         # raise NotImplementedError("_decode needs to be implemented in {} subclass".format(type(self).__name__))
     def _encode(self, data, **kwargs):
         """
         Actual encode function. Mostly implemented in subclasses
         """
-        return self._encode_value(data, **kwargs)
+        if not hasattr(self, "_COMPONENTS"):
+            return self._encode_value(data, **kwargs)
+        else:
+            retval = []
+            for x in self._COMPONENTS:
+                retval.append(x[3]().encode(data[x[0]] if x[0] in data else None))
+            return "".join(retval)
         # raise NotImplementedError("_encode needs to be implemented in {} subclass".format(type(self).__name__))
     def is_available(self, value, char="/"):
         """
