@@ -59,15 +59,16 @@ class CodeTable(object):
             logging.error(str(e))
             sys.exit(1)
         except ValueError as e:
-            logging.warning("{} is not a valid code for {}".format(str(e), type(self).__name__))
+            logging.warning("{} is not a valid code for code table {}".format(value, self._TABLE))
             return None
         except IndexError as e:
-            logging.warning("{} is not a valid code for {}".format(value, type(self).__name__))
+            logging.warning("{} is not a valid code for code table {}".format(value, self._TABLE))
         except pymetdecoder.DecodeError as e:
             logging.warning(str(e))
+        except pymetdecoder.InvalidCode as e:
+            logging.warning(str(e))
         except Exception as e:
-            # print(str(e))
-            raise pymetdecoder.DecodeError("Unable to decode {} in {}".format(value, type(self).__name__))
+            raise pymetdecoder.DecodeError("Unable to decode {} in {}: {}".format(value, type(self).__name__, str(e)))
             return None
     def encode(self, value, **kwargs):
         try:
@@ -147,7 +148,7 @@ class CodeTableLookup(CodeTableSimple):
             retval["unit"] = self._UNIT
         return retval
     def _encode(self, data):
-        return str(self._VALUES.index[data["value"]])
+        return str(self._VALUES.index(data["value"]))
 ################################################################################
 # CODE TABLE CLASSES
 ################################################################################
@@ -255,6 +256,43 @@ class CodeTable0739(CodeTable):
 
         # If we reach this point, we can't encode
         raise pymetdecoder.EncodeError()
+class CodeTable0822(CodeTable):
+    """
+    Amount of temperature change
+    """
+    _TABLE = "0822"
+    def _decode(self, d):
+        # Get sign
+        sign = d[0]
+        if sign == "0":
+            factor = 1
+        elif sign == "1":
+            factor = -1
+        else:
+            raise pymetdecoder.InvalidCode(sign, "temperature sign")
+
+        # Get temperature change
+        val = int(d[1])
+        if 0 <= val <= 4:
+            val = val + 10
+            quantifier = "isGreaterOrEqual" if val == 4 else None
+        else:
+            quantifier = None
+
+        # Return data
+        return { "value": val * factor, "quantifier": quantifier }
+    def _encode(self, data, **kwargs):
+        val  = data["value"]
+        sign = "0" if val >= 0 else "1"
+        if abs(val) >= 14:
+            code = 4
+        elif 10 <= abs(val) < 14:
+            code = int(abs(val) - 10)
+        elif 5 <= abs(val) < 10:
+            code = int(abs(val))
+        else:
+            raise EncodeError("{} is not a valid value for temperature change (must be > 5 Cel)".format(val))
+        return "{}{}".format(sign, str(code))
 class CodeTable0833(CodeTable):
     """
     Duration and character of precipitation given by RRR
@@ -307,6 +345,17 @@ class CodeTable0877(CodeTable):
         val = data["value"]
         code = int(val / 10) + (1 if val % 10 >= 5 else 0)
         return code
+class CodeTable0938(CodeTableLookup):
+    """
+    Elevation above the horizon of the base of anvil of cumulonimbus or of the
+    summit of other phenomena
+    """
+    _TABLE = "0938"
+    _VALUES = [
+        None, "Very low on the horizon", None, "Less than 30 degrees above the horizon",
+        None, None, None, "More than 30 degrees above the horizon"
+    ]
+
 class CodeTable1004(CodeTable):
     """
     Elevation angle of the top of the cloud indicated by C
@@ -961,6 +1010,39 @@ class CodeTable4377(CodeTable):
 
         # If we reach this point, we've been unable to encode
         raise pymetdecoder.EncodeError("Cannot encode visibility {}".format(value))
+class CodeTable4448(CodeTable):
+    """
+    Forward speed of phenomenon
+    """
+    _TABLE = "4448"
+    _KT_RANGE = [
+        (0, 5), (5, 14), (15, 24), (25, 34), (35, 44), (45, 54), (55, 64),
+        (65, 74), (75, 84), (85, None)
+    ]
+    _KMH_RANGE = [
+        (0, 9), (10, 25), (26, 44), (45, 62), (63, 81), (82, 100), (101, 118),
+        (119, 137), (138, 155), (156, None)
+    ]
+    _MS_RANGE = [
+        (0, 2), (3, 7), (8, 12), (13, 17), (18, 22), (23, 27), (28, 32), (33, 38),
+        (39, 43), (44, None)
+    ]
+    _UNITS = ["KT", "km/h", "m/s"]
+    def _decode(self, v):
+        if v == "/":
+            return None
+
+        v = int(v)
+        speeds = []
+        for idx, x in enumerate([self._KT_RANGE, self._KMH_RANGE]):
+            speed = self.decode_range(v, x)
+            speeds.append({
+                "min": speed[0],
+                "max": speed[1],
+                "quantifier": "isGreaterOrEqual" if max is None else None,
+                "unit": self._UNITS[idx]
+            })
+        return { "value": speeds }
 class CodeTable4451(CodeTable):
     """
     Ship's average speed made good during the three hours preceding the time of observation
@@ -1011,6 +1093,21 @@ class CodeTable4451(CodeTable):
 
         # Return value from range
         return self.encode_range(data, unit_range)
+class CodeTable4687(CodeTable):
+    """
+    Present weather phenomenon not specified in Code table 4677, or specification
+    of present weather phenomenon in addition to group 7wwWW
+    """
+    _TABLE = "4687"
+    _NOT_USED = [
+        0, 1, 2, 3, 5, 12, 14, 15, 16, 28, 29, 31, 32, 33, 34, 35, 36, 37, 38, 40,
+        58, 68, 69, 94, 95, 96, 97, 98, 99
+    ]
+    def _decode(self, ww, **kwargs):
+        # Some values are invalid, but they're not all continuous
+        if int(ww) in self._NOT_USED:
+            raise pymetdecoder.InvalidCode(ww, "code table 4687")
+        return { "value": int(ww), "time_before_obs": kwargs.get("time_before") }
 class CodeTable5161(CodeTableLookup):
     """
     Optical phenomena

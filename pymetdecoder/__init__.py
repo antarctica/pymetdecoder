@@ -285,7 +285,8 @@ class Observation(object):
             if unit is not None:
                 data["unit"] = unit
             return data
-        except Exception:
+        except Exception as e:
+            logging.warning(str(e))
             return None
     def _encode_value(self, data, **kwargs):
         try:

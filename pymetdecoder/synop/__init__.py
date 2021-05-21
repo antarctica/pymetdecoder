@@ -56,8 +56,8 @@ class SYNOP(pymetdecoder.Report):
                     def_time_before = { "value": 6, "unit": "h" }
                 elif hour in [3, 9, 15, 21]:
                     def_time_before = { "value": 3, "unit": "h" }
-                elif hour % 2 == 0:
-                    def_time_before = { "value": 2, "unit": "h" },
+                # elif hour % 2 == 0:
+                #     def_time_before = { "value": 2, "unit": "h" },
                 else:
                     def_time_before = { "value": 1, "unit": "h" }
             except Exception:
@@ -266,7 +266,7 @@ class SYNOP(pymetdecoder.Report):
                     if re.match("^(555)$", next_group):
                         break
                     header = int(next_group[0])
-                    if last_header is not None and header < last_header:
+                    if last_header is not None and header < last_header and group_5 is None:
                         break
 
                     if (0 <= header <= 6) and group_5 is not None:
@@ -280,8 +280,15 @@ class SYNOP(pymetdecoder.Report):
                             unit = radiation_unit,
                             time_before = radiation_time
                         )
-                        print(radiation)
-                        radiation_type = RADIATION_TYPES[header]
+                        matches = re.match("55[45]0([78])", group_5)
+                        if matches:
+                            if matches.group(1) == "7":
+                                radiation_type = "net_short_wave"
+                            else:
+                                radiation_type = "direct_solar"
+                        else:
+                            radiation_type = RADIATION_TYPES[header]
+                        group_5 = None
                         if "radiation" not in data:
                             data["radiation"] = {}
                         if radiation_type not in data["radiation"]:
@@ -318,17 +325,22 @@ class SYNOP(pymetdecoder.Report):
                                 if j[1] in ["0", "1", "2", "3"]: # 5[01234]xxx
                                     data["evapotranspiration"] = obs.Evapotranspiration().decode(next_group)
                                 elif j[1] == "4": # 54xxx
-                                    raise NotImplementedError("54xxx is not implemented yet")
+                                    data["temperature_change"] = obs.TemperatureChange().decode(next_group[2:5])
+                                    # raise NotImplementedError("54xxx is not implemented yet")
                                 elif j[1] == "5": # 55xxx
                                     if j[2] in ["0", "1", "2", "3"]: # 55[0123]xx
                                         data["sunshine"] = obs.Sunshine().decode(next_group)
+                                        group_5 = next_group
                                     elif j[2] in ["4", "5"]: # 55[45]xx
-                                        raise NotImplementedError("55[45]xx is not implemented yet")
+                                        if next_group[3:5] not in ["07", "08"]:
+                                            raise pymetdecoder.InvalidCode(next_group, "5jjjj")
+                                        group_5 = next_group
+                                        # raise NotImplementedError("55[45]xx is not implemented yet")
                                     elif j[2] == "/": # 55/xx
                                         # raise NotImplementedError("55/xx is not implemented yet")
                                         data["sunshine"] = obs.Sunshine().decode(next_group)
                                     else:
-                                        raise Exception("bad sunshine")
+                                        raise pymetdecoder.InvalidCode(next_group, "section 3 group 5")
                                     group_5 = next_group
                                 elif j[1] in ["6"]: # 56xxx
                                     data["cloud_drift_direction"] = obs.CloudDriftDirection().decode(next_group)
@@ -779,6 +791,8 @@ class SYNOP(pymetdecoder.Report):
             s3_groups.append(obs.GroundStateSnow().encode(data["ground_state_snow"], group="4"))
         if "evapotranspiration" in data:
             s3_groups.append(obs.Evapotranspiration().encode(data["evapotranspiration"], group="5"))
+        if "temperature_change" in data:
+            s3_groups.append(obs.TemperatureChange().encode(data["temperature_change"], group="54"))
         if "sunshine" in data:
             sunshine = obs.Sunshine().encode(data["sunshine"], group="55")
             s3_groups.append(sunshine)
@@ -788,6 +802,26 @@ class SYNOP(pymetdecoder.Report):
                     for x in rad:
                         if "time_before_obs" in x and x["time_before_obs"]["value"] == radiation_time:
                             s3_groups.append(obs.Radiation().encode(x, group=str(RADIATION_TYPES.index(r))))
+        if "radiation" in data and "sunshine" not in data:
+            for r, rad in data["radiation"].items():
+                for x in rad:
+                    if "time_before_obs" in x:
+                        if x["time_before_obs"]["value"] == 1:
+                            prefix = "4"
+                        elif x["time_before_obs"]["value"] == 24:
+                            prefix = "5"
+                        else:
+                            continue
+                        if r == "net_short_wave":
+                            suffix = "7"
+                        elif r == "direct_solar":
+                            suffix = "8"
+                        else:
+                            continue
+                        s3_groups.append("55{}0{}".format(prefix, suffix))
+                        s3_groups.append(obs.Radiation().encode(x, group=prefix))
+                        # prefix = "4" if x["time_before_obs"]["value"] == 1 else "5"
+                        # s3_groups.append(obs.Radiation().encode(x, group=str(RADIATION_TYPES.index(r))))
         if "cloud_drift_direction" in data and "prevailing_wind" not in data:
             s3_groups.append(obs.CloudDriftDirection().encode(data["cloud_drift_direction"], group="56"))
         if "cloud_elevation" in data:
@@ -808,7 +842,7 @@ class SYNOP(pymetdecoder.Report):
                 drift = obs.CloudDriftDirection().encode(data["cloud_drift_direction"] if "cloud_drift_direction" in data else None)
             ))
         if "cloud_layer" in data:
-            s3_groups.append(obs.CloudLayer().encode(data["cloud_layer"], use90=useCloud90, group="8"))
+            s3_groups.append(obs.CloudLayer().encode(data["cloud_layer"], use90=useCloud90))
         if "weather_info" in data:
             if "time_before_obs" in data["weather_info"]:
                 s3_groups.append(obs.TimeBeforeObs().encode(data["weather_info"]["time_before_obs"], group="900"))
@@ -851,7 +885,36 @@ class SYNOP(pymetdecoder.Report):
         if "valley_clouds" in data:
             s3_groups.append(obs.ValleyClouds().encode(data["valley_clouds"], group="951"))
         if "present_weather_additional" in data:
-            s3_groups.append(obs.Weather().encode(data["present_weather_additional"], group="960", weather_type="present"))
+            for idx, w in enumerate(data["present_weather_additional"]):
+                if idx >= 2:
+                    break
+                s3_groups.append(obs.Weather().encode(w, group="96{}".format(idx), weather_type="present"))
+        if "important_weather" in data:
+            for idx, w in enumerate(data["important_weather"]):
+                if idx >= 2:
+                    break
+                s3_groups.append(obs.ImportantWeather().encode(w, group="96{}".format(idx + 4)))
+        if "present_weather" in data:
+            if "location" in data["present_weather"]:
+                s3_groups.append(obs.LocationMaxConcentration().encode(data["present_weather"]["location"], group="970"))
+            if "movement" in data["present_weather"]:
+                s3_groups.append(obs.PhenomSpeedDir().encode(data["present_weather"]["movement"], group="975"))
+        if "present_weather_additional" in data:
+            for idx, w in enumerate(data["present_weather_additional"]):
+                if idx >= 2:
+                    break
+                if "location" in w:
+                    s3_groups.append(obs.LocationMaxConcentration().encode(w["movement"], group="97{}".format(idx + 1)))
+                if "movement" in w:
+                    s3_groups.append(obs.PhenomSpeedDir().encode(w["movement"], group="97{}".format(idx + 6)))
+        if "past_weather" in data:
+            for idx, w in enumerate(data["past_weather"]):
+                if idx >= 2:
+                    break
+                if "location" in w:
+                    s3_groups.append(obs.LocationMaxConcentration().encode(w["movement"], group="97{}".format(idx + 3)))
+                if "movement" in w:
+                    s3_groups.append(obs.PhenomSpeedDir().encode(w["movement"], group="97{}".format(idx + 8)))
         if "visibility_direction" in data:
             for d in data["visibility_direction"]:
                 s3_groups.append(obs.VisibilityDirection().encode(d, group="98"))
@@ -1267,6 +1330,8 @@ class SYNOP(pymetdecoder.Report):
                     data["mountain_condition"] = obs.MountainCondition().decode(g)
                 elif j[2] == "1":
                     data["valley_clouds"] = obs.ValleyClouds().decode(g)
+                elif j[2] in ["2", "3", "4", "5", "6", "7"]:
+                    raise pymetdecoder.DecodeError("{} is not a valid code".format(g))
                 else:
                     raise NotImplementedError("{} is not implemented yet".format(g))
             elif j[1] == "6":
@@ -1274,8 +1339,48 @@ class SYNOP(pymetdecoder.Report):
                     if "present_weather_additional" not in data:
                         data["present_weather_additional"] = []
                     data["present_weather_additional"].append(obs.Weather().decode(g[3:5], time_before=def_time_before))
+                elif j[2] in ["4", "5"]:
+                    if "important_weather" not in data:
+                        data["important_weather"] = []
+                    data["important_weather"].append(obs.ImportantWeather().decode(g[3:5], time_before=def_time_before))
                 else:
                     raise NotImplementedError("{} is not implemented yet".format(g))
+            elif j[1] == "7":
+                if j[2] in ["0", "1", "2", "3", "4"]:
+                    loc_max_concentration = obs.LocationMaxConcentration().decode(g)
+                    try:
+                        if j[2] == "0":
+                            data["present_weather"]["location"] = loc_max_concentration
+                        elif j[2] == "1":
+                            data["present_weather_additional"][0]["location"] = loc_max_concentration
+                        elif j[2] == "2":
+                            data["present_weather_additional"][1]["location"] = loc_max_concentration
+                        elif j[2] == "3":
+                            data["past_weather"][0]["location"] = loc_max_concentration
+                        elif j[2] == "4":
+                            data["past_weather"][1]["location"] = loc_max_concentration
+                    except KeyError as err:
+                        logging.warning("Cannot decode {} - {} is missing".format(g, str(err)))
+                elif j[2] in ["5", "6", "7", "8", "9"]:
+                    speed_and_dir = obs.PhenomSpeedDir().decode(g)
+                    try:
+                        if j[2] == "5":
+                            data["present_weather"]["movement"] = speed_and_dir
+                        elif j[2] == "6":
+                            data["present_weather_additional"][0]["movement"] =speed_and_dir
+                        elif j[2] == "7":
+                            data["present_weather_additional"][1]["movement"] = speed_and_dir
+                        elif j[2] == "8":
+                            data["past_weather"][0]["movement"] = speed_and_dir
+                        elif j[2] == "9":
+                            data["past_weather"][1]["movement"] = speed_and_dir
+                    except KeyError as err:
+                        logging.warning("Cannot decode {} - {} is missing".format(g, str(err)))
+                else:
+                    raise NotImplementedError("{} is not implemented yet".format(g))
+                # if j[2] == "5":
+                    # if "present_weather" in data:
+                        # data["present_weather"]
             elif j[1] == "8":
                 if "visibility_direction" not in data:
                     data["visibility_direction"] = []

@@ -74,8 +74,10 @@ class SignedTemperature(Observation):
     _UNIT = "Cel"
     def _decode(self, raw, **kwargs):
         sign = kwargs.get("sign")
+        if str(sign) == "/":
+            return None
         if str(sign) not in ["0", "1"]:
-            raise pymetdecoder.InvalidCode(sign, "temperature sign")
+            raise InvalidCode(sign, "temperature sign")
             return None
         return self._decode_value(raw, sign=sign)
     def _decode_convert(self, val, **kwargs):
@@ -116,7 +118,7 @@ class Callsign(Observation):
         elif re.match("^[A-Z\d]{3,}", callsign):
             return { "value": callsign }
         else:
-            raise pymetdecoder.InvalidCode(callsign, "callsign")
+            raise InvalidCode(callsign, "callsign")
     def _encode(self, data):
         return data["value"]
 class CloudDriftDirection(Observation):
@@ -172,7 +174,7 @@ class CloudLayer(Observation):
     def _encode(self, data, **kwargs):
         output = []
         for d in data:
-            output.append("{N}{C}{hh}".format(
+            output.append("8{N}{C}{hh}".format(
                 N  = CloudCover().encode(d["cloud_cover"] if "cloud_cover" in d else None),
                 C  = CloudGenus().encode(d["cloud_genus"] if "cloud_genus" in d else None),
                 hh = self.Height().encode(d["cloud_height"] if "cloud_height" in d else None)
@@ -427,6 +429,8 @@ class GroundState(Observation):
         _UNIT = "Cel"
         def _decode(self, raw, **kwargs):
             sign = raw[0]
+            if sign == "/":
+                return None
             if sign not in ["0", "1"]:
                 raise InvalidCode(sign, "temperature sign")
                 return None
@@ -534,6 +538,12 @@ class IceAccretion(Observation):
         ("thickness", 2, 2, Thickness),
         ("rate", 4, 1, Rate)
     ]
+class ImportantWeather(Observation):
+    """
+    Amplification of weather phenomenon
+    """
+    _CODE_LEN = 2
+    _CODE_TABLE = ct.CodeTable4687
 class LocalPrecipitation(Observation):
     """
     Precipitation character and time of precipitation for Region I
@@ -549,6 +559,18 @@ class LocalPrecipitation(Observation):
     _COMPONENTS = [
         ("character", 0, 1, Character),
         ("time", 1, 1, Time)
+    ]
+class LocationMaxConcentration(Observation):
+    """
+    Location of maximum concentration of phenomenon
+    """
+    _CODE_LEN = 2
+    class Elevation(Observation):
+        _CODE_LEN = 1
+        _CODE_TABLE = ct.CodeTable0938
+    _COMPONENTS = [
+        ("elevation", 3, 1, Elevation),
+        ("direction", 4, 1, DirectionCardinal)
     ]
 class LowestCloudBase(Observation):
     """
@@ -615,6 +637,18 @@ class OpticalPhenomena(Observation):
     _COMPONENTS = [
         ("phenomena", 3, 1, Phenomena),
         ("intensity", 4, 1, Intensity)
+    ]
+class PhenomSpeedDir(Observation):
+    """
+    Forward speed and direction from which phenomenon is moving
+    """
+    _CODE_LEN = 2
+    class Speed(Observation):
+        _CODE_LEN = 1
+        _CODE_TABLE = ct.CodeTable4448
+    _COMPONENTS = [
+        ("speed", 3, 1, Speed),
+        ("direction", 4, 1, DirectionCardinal)
     ]
 class Precipitation(Observation):
     """
@@ -834,7 +868,7 @@ class Region(Observation):
             for region in regions[r]:
                 if region[0] <= int(raw) <= region[1]:
                     return { "value": r }
-        raise pymetdecoder.InvalidCode(raw, "region")
+        raise InvalidCode(raw, "region")
 class RelativeHumidity(Observation):
     """
     Relative humidity
@@ -1369,6 +1403,23 @@ class Temperature(Observation):
         return "{sTTT}".format(
             sTTT = SignedTemperature().encode(data)
         )
+class TemperatureChange(Observation):
+    """
+    Temperature change
+    """
+    _CODE_LEN = 3
+    class TimeBeforeObs(Observation):
+        _CODE_LEN = 1
+        _UNIT = "h"
+        _VALID_RANGE = (0, 5)
+    class Change(Observation):
+        _CODE_LEN = 2
+        _CODE_TABLE = ct.CodeTable0822
+        _UNIT = "Cel"
+    _COMPONENTS = [
+        ("time_before_obs", 0, 1, TimeBeforeObs),
+        ("change", 1, 2, Change)
+    ]
 class TimeBeforeObs(Observation):
     """
     Time before observation
