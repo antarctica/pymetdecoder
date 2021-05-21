@@ -820,8 +820,6 @@ class SYNOP(pymetdecoder.Report):
                             continue
                         s3_groups.append("55{}0{}".format(prefix, suffix))
                         s3_groups.append(obs.Radiation().encode(x, group=prefix))
-                        # prefix = "4" if x["time_before_obs"]["value"] == 1 else "5"
-                        # s3_groups.append(obs.Radiation().encode(x, group=str(RADIATION_TYPES.index(r))))
         if "cloud_drift_direction" in data and "prevailing_wind" not in data:
             s3_groups.append(obs.CloudDriftDirection().encode(data["cloud_drift_direction"], group="56"))
         if "cloud_elevation" in data:
