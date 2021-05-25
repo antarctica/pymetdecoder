@@ -66,7 +66,7 @@ class SYNOP(pymetdecoder.Report):
             # Now add the station ID if it is an AAXX station. Otherwise, add the current position
             if data["station_type"]["value"] == "AAXX":
                 group = next(groups)
-                if not self._isGroupValid(group, allowSlashes=False):
+                if not self._is_valid_group(group, allowSlashes=False):
                     raise pymetdecoder.DecodeError("{} is an invalid IIiii group".format(group))
                 data["station_id"] = obs.StationID().decode(group)
                 data["region"]     = obs.Region().decode(group)
@@ -130,6 +130,10 @@ class SYNOP(pymetdecoder.Report):
                     next_group = next(groups)
                     continue
                 if header == i:
+                    if not self._is_valid_group(next_group):
+                        logging.warning(pymetdecoder.InvalidGroup(next_group))
+                        next_group = next(groups)
+                        continue
                     if i == 1: # Air temperature
                         data["air_temperature"] = obs.Temperature().decode(next_group)
                     elif i == 2: # Dewpoint or relative humidity
@@ -161,7 +165,7 @@ class SYNOP(pymetdecoder.Report):
                             logging.warning("Unexpected precipitation group found in section 1")
                             # raise pymetdecoder.DecodeError("Unexpected precipitation group found in section 1")
                     elif i == 7: # Present and past weather
-                        if not self._isGroupValid(next_group):
+                        if not self._is_valid_group(next_group):
                             logging.warning("{} is not a valid group (expecting 7wwWW)".format(next_group))
                             if "_error" not in data:
                                 data["_error"] = []
@@ -181,10 +185,10 @@ class SYNOP(pymetdecoder.Report):
                             hour = data["obs_time"]["hour"]["value"]
                         except Exception:
                             hour = None
-                        data["present_weather"] = obs.Weather().decode(next_group[1:3], time_before=def_time_before)
+                        data["present_weather"] = obs.Weather().decode(next_group[1:3], time_before=def_time_before, type="present")
                         data["past_weather"] = [
-                            obs.Weather().decode(next_group[3:4]),
-                            obs.Weather().decode(next_group[4:5])
+                            obs.Weather().decode(next_group[3:4], type="past"),
+                            obs.Weather().decode(next_group[4:5], type="past")
                         ]
                     elif i == 8: # Cloud type and amount
                         data["cloud_types"] = obs.CloudType().decode(next_group)
@@ -198,9 +202,13 @@ class SYNOP(pymetdecoder.Report):
             has_section_2 = False
             ice_groups = []
             if next_group[0:3] == "222":
-                data["displacement"] = obs.ShipDisplacement().decode(next_group)
-                next_group = next(groups)
-                has_section_2 = True
+                if not self._is_valid_group(next_group):
+                    logging.warning(pymetdecoder.InvalidGroup(next_group))
+                    next_group = next(groups)
+                else:
+                    data["displacement"] = obs.ShipDisplacement().decode(next_group)
+                    next_group = next(groups)
+                    has_section_2 = True
 
             # Initialise swell wave directions
             sw_dirs = None
@@ -214,9 +222,14 @@ class SYNOP(pymetdecoder.Report):
                             header = None
                     except ValueError as e:
                         logging.warning("{} is not a valid section 2 group".format(next_group))
-                        break
+                        next_group = next(groups)
+                        continue
 
                     if header == i:
+                        if not self._is_valid_group(next_group):
+                            logging.warning(pymetdecoder.InvalidGroup(next_group))
+                            next_group = next(groups)
+                            continue
                         if i == 0: # Sea surface temperature
                             data["sea_surface_temperature"] = obs.SeaSurfaceTemperature().decode(next_group)
                         elif i == 1: # Period and height of waves (instrumental)
@@ -230,9 +243,6 @@ class SYNOP(pymetdecoder.Report):
                         elif i == 3: # Swell wave directions
                             sw_dirs = next_group
                         elif i == 4 or i == 5:
-                            if sw_dirs is None:
-                                logging.warning("Cannot decode swell wave group {} - no preceeding direction group".format(next_group))
-                                continue
                             if "swell_waves" not in data:
                                 data["swell_waves"] = []
                             data["swell_waves"].append(
@@ -265,7 +275,12 @@ class SYNOP(pymetdecoder.Report):
                 while True:
                     if re.match("^(555)$", next_group):
                         break
-                    header = int(next_group[0])
+                    try:
+                        header = int(next_group[0])
+                    except Exception:
+                        logging.warning(pymetdecoder.InvalidGroup(next_group))
+                        next_group = next(groups)
+                        continue
                     if last_header is not None and header < last_header and group_5 is None:
                         break
 
@@ -298,7 +313,9 @@ class SYNOP(pymetdecoder.Report):
                         # group_5 = None
                     else:
                         if header == 0:
-                            if data["region"]["value"] == "Antarctic":
+                            if data["region"] is None:
+                                logging.warning("No region information found")
+                            elif data["region"]["value"] == "Antarctic":
                                 # TODO: tidy this up a bit
                                 data["max_wind"] = obs.SurfaceWind().decode(next_group[1:5])
                                 data["max_wind"]["speed"]["unit"] = data["surface_wind"]["speed"]["unit"]
@@ -312,7 +329,9 @@ class SYNOP(pymetdecoder.Report):
                         elif header == 2:
                             data["minimum_temperature"] = obs.Temperature().decode(next_group)
                         elif header == 3:
-                            if not data["region"]["value"] in ["II", "III", "IV", "VI"]:
+                            if data["region"] is None:
+                                logging.warning("No region information found")
+                            elif not data["region"]["value"] in ["II", "III", "IV", "VI"]:
                                 logging.warning("Ground state not measured in region {}".format(data["region"]["value"]))
                                 next_group = next(groups)
                                 continue
@@ -326,7 +345,6 @@ class SYNOP(pymetdecoder.Report):
                                     data["evapotranspiration"] = obs.Evapotranspiration().decode(next_group)
                                 elif j[1] == "4": # 54xxx
                                     data["temperature_change"] = obs.TemperatureChange().decode(next_group[2:5])
-                                    # raise NotImplementedError("54xxx is not implemented yet")
                                 elif j[1] == "5": # 55xxx
                                     if j[2] in ["0", "1", "2", "3"]: # 55[0123]xx
                                         data["sunshine"] = obs.Sunshine().decode(next_group)
@@ -335,9 +353,7 @@ class SYNOP(pymetdecoder.Report):
                                         if next_group[3:5] not in ["07", "08"]:
                                             raise pymetdecoder.InvalidCode(next_group, "5jjjj")
                                         group_5 = next_group
-                                        # raise NotImplementedError("55[45]xx is not implemented yet")
                                     elif j[2] == "/": # 55/xx
-                                        # raise NotImplementedError("55/xx is not implemented yet")
                                         data["sunshine"] = obs.Sunshine().decode(next_group)
                                     else:
                                         raise pymetdecoder.InvalidCode(next_group, "section 3 group 5")
@@ -346,74 +362,27 @@ class SYNOP(pymetdecoder.Report):
                                     data["cloud_drift_direction"] = obs.CloudDriftDirection().decode(next_group)
                                 elif j[1] in ["7"]: # 57xxx
                                     data["cloud_elevation"] = obs.CloudElevation().decode(next_group)
-                                    # raise NotImplementedError("57xxx is not implemented yet")
-    #                                 self.data["cloudDirElevation"] = obs.cloud_direction_elevation(next_group)
-    #                                 # print("section 3 group 5 dir and elevation of cloud")
                                 elif j[1] in ["8", "9"]: # 5[89]xxx
                                     data["pressure_change"] = obs.PressureChange().decode(next_group)
-
-        #                     isGroup5    = True
-        #                     radDuration = None
-        #                     while isGroup5: # 5xxxx
-        #                         if next_group.startswith("5") and len(next_group) == 5:
-        #                             j = list(next_group)
-        #                             if j[1] in ["0", "1", "2", "3"]: # 5[01234]xxx
-        #                                 data["evapotranspiration"] = obs.Evapotranspiration().decode(next_group)
-        #                             elif j[1] in ["4"]: # 54xxx
-        #                                 print("54xxx")
-        #                             elif j[1] == "5": # 55xxx
-        #                                 if j[2] in ["0", "1", "2", "3"]: # 55[0123]xx
-        #                                     data["sunshine"] = obs.Sunshine().decode(next_group)
-        #                                 elif j[2] in ["4", "5"]: # 55[45]xx
-        #                                     print("55[45]xx")
-        #                                 elif j[2] == "/": # 55/xx
-        #                                     print("55/xx")
-        # #                                     self.data["sunshine"] = obs.sunshine(next_group)
-        #                                 else:
-        #                                     print("bad sunshine")
-        # #                                     # print("more sunshine ({})".format(next_group))
-        #                             elif j[1] in ["6"]: # 56xxx
-        #                                 data["cloud_drift_direction"] = obs.CloudDriftDirection().decode(next_group)
-        #                             elif j[1] in ["7"]: # 57xxx
-        #                                 print("57xxx")
-        # #                                 self.data["cloudDirElevation"] = obs.cloud_direction_elevation(next_group)
-        # #                                 # print("section 3 group 5 dir and elevation of cloud")
-        #                             elif j[1] in ["8", "9"]: # 5[89]xxx
-        #                                 print("58xxx")
-        # #                                 self.data["pressureChange"] = obs.pressure_change(next_group)
-        # #                         elif radDuration is not None:
-        # #                             if re.match(r"^([012346]|5[01234])", next_group):
-        # #                                 if "radiation" not in self.data:
-        # #                                     self.data["radiation"] = []
-        # #                                 radiation = obs.radiation(next_group)
-        # #                                 radiation.duration = radDuration
-        # #                                 if radDuration == "1h":
-        # #                                     radiation.amount.setUnit("kJ/m2")
-        # #                                 elif radDuration == "24h":
-        # #                                     radiation.amount.setUnit("J/cm2")
-        # #                                 radiation.convertUnit()
-        # #                                 self.data["radiation"].append(radiation)
-        # #                                 radDuration = None
-        #                             else:
-        #                                 isGroup5 = False
-        #                                 i = int(next_group[0:1])
-        # #                             isRadiation = None
-        #                         else:
-        #                             isGroup5 = False
-        #                             i = int(next_group[0:1])
-        #                         next_group = next(groups)
                         elif header == 6:
                             # Check that we are expecting precipitation information in section 3
                             # If not, raise error
                             try:
-                                if data["precipitation_indicator"]["in_group_3"]:
+                                if "precipitation_indicator" not in data or data["precipitation_indicator"] is None:
+                                    logging.warning("No precipitation indicator information found")
+                                elif data["precipitation_indicator"]["in_group_3"]:
                                     data["precipitation_s3"] = obs.Precipitation().decode(next_group, tenths=False)
                                 else:
                                     logging.warning("Unexpected precipitation group found in section 3")
+                            # except TypeError:
+                                # This happens when an invalid precipitation indicator group was specified earlier
+                                # logging.warning("No precipitation indicator information found")
                             except Exception:
                                 raise pymetdecoder.DecodeError("Unexpected precipitation group found in section 3")
                         elif header == 7:
-                            if data["region"]["value"] == "Antarctic":
+                            if data["region"] is None:
+                                logging.warning("No region information found")
+                            elif data["region"]["value"] == "Antarctic":
                                 data["prevailing_wind"] = obs.DirectionCardinal().decode(next_group[1])
                                 data["cloud_drift_direction"] = obs.CloudDriftDirection().decode(next_group)
                             else:
@@ -459,163 +428,6 @@ class SYNOP(pymetdecoder.Report):
                         # break
                     data["section5"].append(next_group)
                     next_group = next(groups)
-
-
-                # # Parse the next group, based on the group header
-                # for i in range(0, 10):
-                #     try:
-                #         if not re.match("^(555)$", next_group):
-                #             header = int(next_group[0:1])
-                #         else:
-                #             header = None
-                #     except ValueError as e:
-                #         logging.warning("{} is not a valid section 3 group".format(next_group))
-                #         break
-                #
-                #     # need to deal with multiple 5-groups and 8-groups. if there are more than
-                #     # 10 groups in 333, then it doesn't work
-                #     if header <= i:
-                #         print(next_group)
-                        # next_group = next(groups)
-
-        #         for i in range(0, 10):
-        #             try:
-        #                 if not re.match("^(555)$", next_group):
-        #                     header = int(next_group[0:1])
-        #                 else:
-        #                     header = None
-        #             except ValueError as e:
-        #                 logging.warning("{} is not a valid section 3 group".format(next_group))
-        #                 break
-        #             if header == i:
-        #                 if i == 0:
-        #                     logging.warning("section 3 group 0")
-        #                 if i == 1:
-        #                     if not self._isGroupValid(next_group):
-        #                         logging.warning("{} is an invalid maximum temperature group".format(next_group))
-        #                         next_group = next(groups)
-        #                         continue
-        #                     self.data["maximumTemperature"] = obs.temperature(next_group)
-        #                 if i == 2:
-        #                     if not self._isGroupValid(next_group):
-        #                         logging.warning("{} is an invalid minimum temperature group".format(next_group))
-        #                         next_group = next(groups)
-        #                         continue
-        #                     self.data["minimumTemperature"] = obs.temperature(next_group)
-        #                 if i == 3:
-        #                     if not self._isGroupValid(next_group):
-        #                         logging.warning("{} is an invalid ground state group".format(next_group))
-        #                         next_group = next(groups)
-        #                         continue
-        #                     if not self.data["region"].value in ["II", "III", "IV", "VI"]:
-        #                         logging.warning("Ground state not measured in region {}".format(self.data["region"].value))
-        #                         next_group = next(groups)
-        #                         continue
-        #                     self.data["groundState"] = obs.ground_state(next_group)
-        #
-        #                     # Temperatures are not included in Region IV
-        #                     if self.data["region"].value == "IV" and self.data["groundState"].temperature.available:
-        #                         logging.warning("Ground temperature found, but it is not included in Region IV")
-        #                         self.data["groundState"].temperature.available = False
-        #                         delattr(self.data["groundState"].temperature, "value")
-        #                 if i == 4:
-        #                     if not self._isGroupValid(next_group):
-        #                         logging.warning("{} is an invalid solid precipitation group".format(next_group))
-        #                         next_group = next(groups)
-        #                         continue
-        #                     self.data["groundStateSnow"] = obs.ground_state_snow(next_group)
-        #                 if i == 5:
-        #                     isGroup5    = True
-        #                     radDuration = None
-        #                     while isGroup5: # 5xxxx
-        #                         if next_group.startswith("5") and len(next_group) == 5:
-        #                             j = list(next_group)
-        #                             if j[1] in ["0", "1", "2", "3"]: # 5[01234]xxx
-        #                                 self.data["evapotranspiration"] = obs.evapotranspiration(next_group)
-        #                             elif j[1] in ["4"]: # 54xxx
-        #                                 print("section 3 group 5 temperature change")
-        #                             elif j[1] == "5": # 55xxx
-        #                                 if j[2] in ["0", "1", "2"]: # 55[012]xx
-        #                                     self.data["sunshine"] = obs.sunshine(next_group)
-        #                                     radDuration = "24h"
-        #                                 elif j[2] == "3":
-        #                                     self.data["sunshine"] = obs.sunshine(next_group)
-        #                                     radDuration = "1h"
-        #                                     # print("sunshine over previous hour. also radiation ({})".format(next_group))
-        #                                 elif j[2] in ["4", "5"]: # 55[45]xx
-        #                                     print("radiation")
-        #                                 elif j[2] == "/": # 55/xx
-        #                                     self.data["sunshine"] = obs.sunshine(next_group)
-        #                                 else:
-        #                                     print("bad sunshine")
-        #                                     # print("more sunshine ({})".format(next_group))
-        #                             elif j[1] in ["6"]: # 56xxx
-        #                                 self.data["cloudDriftDirection"] = obs.cloud_drift_direction(next_group)
-        #                             elif j[1] in ["7"]: # 57xxx
-        #                                 self.data["cloudDirElevation"] = obs.cloud_direction_elevation(next_group)
-        #                                 # print("section 3 group 5 dir and elevation of cloud")
-        #                             elif j[1] in ["8", "9"]: # 5[89]xxx
-        #                                 self.data["pressureChange"] = obs.pressure_change(next_group)
-        #                         elif radDuration is not None:
-        #                             if re.match(r"^([012346]|5[01234])", next_group):
-        #                                 if "radiation" not in self.data:
-        #                                     self.data["radiation"] = []
-        #                                 radiation = obs.radiation(next_group)
-        #                                 radiation.duration = radDuration
-        #                                 if radDuration == "1h":
-        #                                     radiation.amount.setUnit("kJ/m2")
-        #                                 elif radDuration == "24h":
-        #                                     radiation.amount.setUnit("J/cm2")
-        #                                 radiation.convertUnit()
-        #                                 self.data["radiation"].append(radiation)
-        #                                 radDuration = None
-        #                             else:
-        #                                 isGroup5 = False
-        #                                 i = int(next_group[0:1])
-        #                             isRadiation = None
-        #                         else:
-        #                             isGroup5 = False
-        #                             i = int(next_group[0:1])
-        #                         next_group = next(groups)
-        #
-        #                     # # Go through each group 5 code and parse accordingly
-        #                     # # based on code table 2061
-        #                     # for g in group5:
-        #                     #     j = list(g)
-        #                     #     if j[1] in ["0", "1", "2", "3"]:
-        #                     #         self.data["evapotranspiration"] = section3.Evapotranspiration(g)
-        #                     #     elif j[1] in ["4"]:
-        #                     #         print("section 3 group 5 temperature change")
-        #                     #     elif j[1] == "5":
-        #                     #         print("section 3 group 5 sunshine ({})".format(g))
-        #                     #         if j[2] in ["0", "1", "2"]:
-        #                     #             self.data["sunshine"] = section3.Sunshine(g)
-        #                     #         elif j[2] == "3":
-        #                     #             self.data["sunshine"] = section3.Sunshine(g)
-        #                     #             # self.data[]
-        #                     #             print("sunshine over previous hour. also radiation ({})".format(next_group))
-        #                     #         elif j[2] in ["4", "5"]:
-        #                     #             print("radiation")
-        #                     #         elif j[2] == "/":
-        #                     #             print("cant do sunshine")
-        #                     #         else:
-        #                     #             print("bad sunshine")
-        #                     #             # print("more sunshine ({})".format(next_group))
-        #                     #     elif j[1] in ["6"]:
-        #                     #         print("section 3 group 5 cloud drift")
-        #                     #     elif j[1] in ["7"]:
-        #                     #         print("section 3 group 5 dir and elevation of cloud")
-        #                     #     elif j[1] in ["8", "9"]:
-        #                     #         print("section 3 group 5 surface pressure change")
-        #                 if i == 6:
-        #                     logging.warning("section 3 group 6")
-        #                 if i == 7:
-        #                     logging.warning("section 3 group 7")
-        #                 if i == 8:
-        #                     logging.warning("section 3 group 8")
-        #                 if i == 9:
-        #                     logging.warning("section 3 group 9")
-        #                 next_group = next(groups)
         except StopIteration:
             # If we have reached this point with iceGroups or group 9 still intact, parse them
             try:
@@ -655,7 +467,7 @@ class SYNOP(pymetdecoder.Report):
             ("callsign", obs.Callsign, {}),
             [("obs_time", obs.ObservationTime, {}), ("wind_indicator", obs.WindIndicator, {})],
             ("station_id", obs.StationID, {}),
-            ("station_position", obs.StationPosition, { "obs_type": data["station_type"]["value"] })
+            ("station_position", obs.StationPosition, { "obs_type": data["station_type"]["value"], "allow_none": True })
         ]
         for s in _section0:
             if isinstance(s, tuple):
@@ -760,7 +572,6 @@ class SYNOP(pymetdecoder.Report):
                 group = list(filter(lambda a: a is not None, group))
                 if len(group) > 0:
                     groups.append("".join(group))
-
 
         ### SECTION 3
         try:
@@ -892,12 +703,12 @@ class SYNOP(pymetdecoder.Report):
                 if idx >= 2:
                     break
                 s3_groups.append(obs.ImportantWeather().encode(w, group="96{}".format(idx + 4)))
-        if "present_weather" in data:
+        if "present_weather" in data and data["present_weather"] is not None:
             if "location" in data["present_weather"]:
                 s3_groups.append(obs.LocationMaxConcentration().encode(data["present_weather"]["location"], group="970"))
             if "movement" in data["present_weather"]:
                 s3_groups.append(obs.PhenomSpeedDir().encode(data["present_weather"]["movement"], group="975"))
-        if "present_weather_additional" in data:
+        if "present_weather_additional" in data and data["present_weather_additional"] is not None:
             for idx, w in enumerate(data["present_weather_additional"]):
                 if idx >= 2:
                     break
@@ -905,8 +716,10 @@ class SYNOP(pymetdecoder.Report):
                     s3_groups.append(obs.LocationMaxConcentration().encode(w["movement"], group="97{}".format(idx + 1)))
                 if "movement" in w:
                     s3_groups.append(obs.PhenomSpeedDir().encode(w["movement"], group="97{}".format(idx + 6)))
-        if "past_weather" in data:
+        if "past_weather" in data and data["past_weather"] is not None:
             for idx, w in enumerate(data["past_weather"]):
+                if w is None:
+                    continue
                 if idx >= 2:
                     break
                 if "location" in w:
@@ -936,53 +749,8 @@ class SYNOP(pymetdecoder.Report):
             s3_groups.append(obs.SuddenHumidityChange().encode(data["sudden_humidity_change"],
                 group = "998" if data["sudden_humidity_change"]["value"] > 0 else "999"
             ))
-
-
-
-
-        # _section3 = [
-        #     ("maximum_temperature", obs.Temperature, { "group": "1" }, False),
-        #     ("minimum_temperature", obs.Temperature, { "group": "2" }, False),
-        #     ("ground_state", obs.GroundState, { "group": "3" }, False),
-        #     ("ground_state_snow", obs.GroundStateSnow, { "group": "4" }, False),
-        #     ("evapotranspiration", obs.Evapotranspiration, { "group": "5" }, False),
-        #     ("sunshine", obs.Sunshine, { "group": "55" }, False),
-        #     ("cloud_drift_direction", obs.CloudDriftDirection, { "group": "56" }, False),
-        #     ("pressure_change", obs.PressureChange, { "group": "5" }, False),
-        #     ("precipitation_s3", obs.Precipitation, { }, False),
-        #     ("cloud_layer", obs.CloudLayer, { "use90": useCloud90 }, False),
-        #     ("precipitation_begin", obs.PrecipitationTime, {}, False),
-        #     ("precipitation_end", obs.PrecipitationTime, {}, False),
-        #     ("highest_gust", obs.HighestGust, { "time_before": weather_time }, False),
-        #     ("mean_wind", obs.MeanWind, { "time_before": weather_time }, False),
-        #     ("snow_fall", obs.SnowFall, { "time_before": weather_time }, False),
-        #     ("present_weather_additional", obs.Weather, { "group": "960", "weather_type": "present" }, False)
-        # ]
-        # for s in _section3:
-        #     if isinstance(s, tuple):
-        #         s = [s]
-        #     group = []
-        #     for x in s:
-        #         if x[0] in data:
-        #             if data[x[0]] is None:
-        #                 val = None
-        #             val = data[x[0]]
-        #             obj = x[1]
-        #             attrs = x[2]
-        #             if x[0] == "precipitation_s3":
-        #                 if "time_before_obs" in val and val["time_before_obs"] == { "value": 24, "unit": "h" }:
-        #                     obj = obs.Precipitation
-        #                 else:
-        #                     obj = obs.Precipitation
-        #                     attrs = { "group": "6" }
-        #             if x[0] == "cloud_drift_direction"
-        #             group.append(obj().encode(val, **attrs))
-        #         else:
-        #             if x[3]:
-        #                 raise pymetdecoder.EncodeError("Required variable '{}' is missing".format(x[0]))
-        #                 return None
-            if len(group) > 0:
-                s3_groups.append("".join(group))
+            # if len(group) > 0:
+                # s3_groups.append("".join(group))
         if len(s3_groups) > 0:
             groups.extend(["333"] + s3_groups)
 
@@ -992,96 +760,6 @@ class SYNOP(pymetdecoder.Report):
 
         # Return the encoded report
         return " ".join(groups)
-
-        # if "station_type" in data:
-            # groups.append(obs.StationType().encode(data["station_type"]))
-        # try:
-        #     groups = []
-        #     parsed = ["region"] # pre-populate with stuff we don't need to re-encode
-        #     # if "station_type" in data:
-        #     #     groups.append(obs.StationType().encode(data["station_type"]))
-        #     groups.append(obs.StationType().encode(data["station_type"] if "station_type" in data else {}))
-        #     parsed.append("station_type")
-        #     if "callsign" in data:
-        #         if "value" in data["callsign"]:
-        #             groups.append(obs.Callsign().encode(data["callsign"]["value"]))
-        #             parsed.append("callsign")
-        #     obs_time = obs.ObservationTime().encode(data["obs_time"] if "obs_time" in data else {})
-        #     wind_ind = obs.WindIndicator().encode(data["wind_indicator"] if "wind_indicator" in data else {})
-        #     groups.append("{}{}".format(obs_time, wind_ind))
-        #     parsed.extend(("obs_time", "wind_indicator"))
-        #     if "station_id" in data:
-        #         groups.append(obs.StationID().encode(data["station_id"] if "station_id" in data else {}))
-        #         parsed.append("station_id")
-        #     if "station_position" in data:
-        #         groups.append(
-        #             obs.StationPosition().encode(
-        #                 data["station_position"] if "station_position" in data else {},
-        #                 obs_type = data["station_type"])
-        #             )
-        #         parsed.append("station_position")
-        #     precip_ind  = obs.PrecipitationIndicator().encode(data["precipitation_indicator"] if "precipitation_indicator" in data else {})
-        #     weather_ind = obs.WeatherIndicator().encode(data["weather_indicator"] if "weather_indicator" in data else {})
-        #     cloud_base  = obs.LowestCloudBase().encode(data["lowest_cloud_base"] if "lowest_cloud_base" in data else {})
-        #     visibility  = obs.Visibility().encode(data["visibility"] if "visibility" in data else {})
-        #     groups.append("{}{}{}{}".format(precip_ind, weather_ind, cloud_base, visibility))
-        #     parsed.extend(("precipitation_indicator", "weather_indicator", "lowest_cloud_base", "visibility"))
-        #     cloud_cover = obs.CloudCover().encode(data["cloud_cover"] if "cloud_cover" in data else {})
-        #     surface_wind = obs.SurfaceWind().encode(data["surface_wind"] if "surface_wind" in data else {})
-        #     groups.append("{}{}".format(cloud_cover, surface_wind))
-        #     parsed.extend(("cloud_cover", "surface_wind"))
-        #     if "air_temperature" in data:
-        #         groups.append(obs.Temperature().encode(data["air_temperature"], group="1"))
-        #         parsed.append("air_temperature")
-        #     if "dewpoint_temperature" in data:
-        #         groups.append(obs.Temperature().encode(data["dewpoint_temperature"], group="2"))
-        #         parsed.append("dewpoint_temperature")
-        #     if "relative_humidity" in data:
-        #         groups.append(obs.RelativeHumidity().encode(data["relative_humidity"]))
-        #         parsed.append("relative_humidity")
-        #     if "station_pressure" in data:
-        #         groups.append(obs.Pressure().encode(data["station_pressure"], group="3"))
-        #         parsed.append("station_pressure")
-        #     if "sea_level_pressure" in data:
-        #         groups.append(obs.Pressure().encode(data["sea_level_pressure"], group="4"))
-        #         parsed.append("sea_level_pressure")
-        #     if "geopotential" in data:
-        #         groups.append(obs.Geopotential().encode(data["geopotential"]))
-        #         parsed.append("geopotential")
-        #     if "pressure_tendency" in data:
-        #         groups.append(obs.PressureTendency().encode(data["pressure_tendency"]))
-        #         parsed.append("pressure_tendency")
-        #     if "precipitation" in data:
-        #         groups.append(obs.Precipitation().encode(data["precipitation"]))
-        #         parsed.append("precipitation")
-        #     if "present_weather" in data or "past_weather" in data:
-        #         # groups.append(obs.Weather().encode(data["present_weather"]))
-        #         if "present_weather" in data:
-        #             present_weather = obs.Weather().encode(data["present_weather"], weather_type="present")
-        #         if "past_weather" in data:
-        #             past_weather = [
-        #                 obs.Weather().encode(data["past_weather"][0], weather_type="past"),
-        #                 obs.Weather().encode(data["past_weather"][1], weather_type="past"),
-        #             ]
-        #         groups.append("7{}{}".format(present_weather, "".join(past_weather)))
-        #         parsed.extend(("present_weather", "past_weather"))
-        #     if "cloud_types" in data:
-        #         groups.append(obs.CloudType().encode(data["cloud_types"]))
-        #         parsed.append("cloud_types")
-        #     if "exact_obs_time" in data:
-        #         groups.append(obs.ExactObservationTime().encode(data["exact_obs_time"]))
-        #         parsed.append("exact_obs_time")
-        # except Exception as e:
-        #     logging.error("Error when encoding: {}".format(str(e)))
-        #     sys.exit(1)
-        #
-        # # Check if everything was parsed
-        # for d in data.keys():
-        #     if d not in parsed:
-        #         raise pymetdecoder.DecodeError("Unable to encode parameter '{}'".format(d))
-
-        # # Return the encoded report
-        # return " ".join(groups)
 
     # Functions to decode individual groups
     def _parse_sequential_group(self, data, min, max, groups, next_group, section, skip_re):
@@ -1109,7 +787,7 @@ class SYNOP(pymetdecoder.Report):
                 if this_info is None:
                     continue
                     # raise Exception("cannot determine (header: {}, group: {})".format(header, next_group))
-                if not self._isGroupValid(next_group):
+                if not self._is_valid_group(next_group):
                     logging.warning("{} is an invalid {} group".format(next_group, this_info[0]))
                     next_group = next(groups)
                     continue
@@ -1140,7 +818,7 @@ class SYNOP(pymetdecoder.Report):
         :param string group: SYNOP code to decode
         """
         # Check group matches regular expression
-        if not self._isGroupValid(group):
+        if not self._is_valid_group(group):
             raise pymetdecoder.DecodeError("{} is an invalid YYGGi group".format(group))
             return (None, None)
 
@@ -1158,7 +836,7 @@ class SYNOP(pymetdecoder.Report):
         :param string group: SYNOP code to decode
         """
         # Check group matches regular expression
-        if not self._isGroupValid(group):
+        if not self._is_valid_group(group):
             logging.warning("{} is an invalid iihVV group".format(group))
             return (None, None, None, None)
 
@@ -1176,7 +854,7 @@ class SYNOP(pymetdecoder.Report):
 
         :param string group: SYNOP code to decode
         """
-        if not self._isGroupValid(group):
+        if not self._is_valid_group(group):
             logging.warning("{} is an invalid Nddff group".format(group))
             return (None, None)
 
@@ -1202,10 +880,10 @@ class SYNOP(pymetdecoder.Report):
             except AttributeError:
                 pass
 
-            present_weather = obs.Weather().decode(group[1:3])
+            present_weather = obs.Weather().decode(group[1:3], type="present")
             past_weather = [
-                obs.Weather().decode(group[3:4]),
-                obs.Weather().decode(group[4:5])
+                obs.Weather().decode(group[3:4], type="past"),
+                obs.Weather().decode(group[4:5], type="past")
             ]
             return (present_weather, past_weather)
     def _parse_group_9(self, data, group_9, def_time_before):
@@ -1254,7 +932,7 @@ class SYNOP(pymetdecoder.Report):
                         attr = "precipitation_end"
                     data[attr] = obs.PrecipitationTime().decode(g)
                 else:
-                    raise NotImplementedError("{} is not implemented yet".format(g))
+                    self.handle_not_implemented(g)
             elif j[1] == "1":
                 if j[2] == "0":
                     if "highest_gust" not in data:
@@ -1284,7 +962,7 @@ class SYNOP(pymetdecoder.Report):
                         time_before = time_before_obs
                     ))
                 else:
-                    raise NotImplementedError("{} is not implemented yet".format(g))
+                    self.handle_not_implemented(g)
             elif j[1] == "2":
                 if j[2] == "4":
                     data["sea_state"] = obs.SeaState().decode(g[3])
@@ -1296,7 +974,7 @@ class SYNOP(pymetdecoder.Report):
                 elif j[2] == "9":
                     data["drift_snow"] = obs.DriftSnow().decode(g)
                 else:
-                    raise NotImplementedError("{} is not implemented yet".format(g))
+                    self.handle_not_implemented(g)
             elif j[1] == "3":
                 if j[2] == "1":
                     # try:
@@ -1311,7 +989,7 @@ class SYNOP(pymetdecoder.Report):
                         data["deposit_diameter"] = []
                     data["deposit_diameter"].append(obs.DepositDiameter().decode(g))
                 else:
-                    raise NotImplementedError("{} is not implemented yet".format(g))
+                    self.handle_not_implemented(g)
             elif j[1] == "4":
                 if j[2] == "0":
                     if "cloud_evolution" not in data:
@@ -1322,7 +1000,7 @@ class SYNOP(pymetdecoder.Report):
                         data["max_low_cloud_concentration"] = []
                     data["max_low_cloud_concentration"].append(obs.MaxLowCloudConcentration().decode(g))
                 else:
-                    raise NotImplementedError("{} is not implemented yet".format(g))
+                    self.handle_not_implemented(g)
             elif j[1] == "5":
                 if j[2] == "0":
                     data["mountain_condition"] = obs.MountainCondition().decode(g)
@@ -1331,18 +1009,22 @@ class SYNOP(pymetdecoder.Report):
                 elif j[2] in ["2", "3", "4", "5", "6", "7"]:
                     raise pymetdecoder.DecodeError("{} is not a valid code".format(g))
                 else:
-                    raise NotImplementedError("{} is not implemented yet".format(g))
+                    self.handle_not_implemented(g)
             elif j[1] == "6":
                 if j[2] in ["0", "1"]:
                     if "present_weather_additional" not in data:
                         data["present_weather_additional"] = []
-                    data["present_weather_additional"].append(obs.Weather().decode(g[3:5], time_before=def_time_before))
+                    weather = obs.Weather().decode(g[3:5], time_before=def_time_before, type="present")
+                    data["present_weather_additional"].append(weather)
                 elif j[2] in ["4", "5"]:
                     if "important_weather" not in data:
                         data["important_weather"] = []
-                    data["important_weather"].append(obs.ImportantWeather().decode(g[3:5], time_before=def_time_before))
+                    use_4687 = True if j[2] == "5" else False
+                    data["important_weather"].append(
+                        obs.ImportantWeather().decode(g[3:5], time_before=def_time_before, use_4687=use_4687)
+                    )
                 else:
-                    raise NotImplementedError("{} is not implemented yet".format(g))
+                    self.handle_not_implemented(g)
             elif j[1] == "7":
                 if j[2] in ["0", "1", "2", "3", "4"]:
                     loc_max_concentration = obs.LocationMaxConcentration().decode(g)
@@ -1375,10 +1057,7 @@ class SYNOP(pymetdecoder.Report):
                     except KeyError as err:
                         logging.warning("Cannot decode {} - {} is missing".format(g, str(err)))
                 else:
-                    raise NotImplementedError("{} is not implemented yet".format(g))
-                # if j[2] == "5":
-                    # if "present_weather" in data:
-                        # data["present_weather"]
+                    self.handle_not_implemented(g)
             elif j[1] == "8":
                 if "visibility_direction" not in data:
                     data["visibility_direction"] = []
@@ -1402,92 +1081,9 @@ class SYNOP(pymetdecoder.Report):
                 elif j[2] in ["8", "9"]:
                     data["sudden_humidity_change"] = obs.SuddenHumidityChange().decode(g[2:5])
                 else:
-                    raise NotImplementedError("{} is not implemented yet".format(g))
+                    self.handle_not_implemented(g)
             else:
-                raise NotImplementedError("{} is not implemented yet".format(g))
-        return data
-
-            # if j[1] == "0":
-            #     if j[2] == "7":
-            #         # print(next_group)
-            #         time_before_obs = obs.TimeBeforeObs().decode(next_group[3:5])
-            #     elif j[2] == "9": # 909xx
-            #         # Check present weather. If present weather is >= 50, this is the beginning
-            #         # Otherwise, this is the end of precipitation
-            #         try:
-            #             if data["present_weather"]["value"] >= 50:
-            #                 attr = "precipitation_begin"
-            #             else:
-            #                 attr = "precipitation_end"
-            #         except:
-            #             attr = "precipitation_end"
-            #         data[attr] = obs.PrecipitationTime().decode(next_group)
-            #     else:
-            #         raise NotImplementedError("90xxx is not implemented yet")
-            # elif j[1] == "1":
-            #     if j[2] == "0":
-            #         if "highest_gust" not in data:
-            #             data["highest_gust"] = []
-            #         data["highest_gust"].append(obs.HighestGust().decode(next_group,
-            #             unit = data["wind_indicator"]["unit"] if data["wind_indicator"] is not None else None,
-            #             measure_period = { "value": 10, "unit": "min" }
-            #         ))
-            #     elif j[2] == "1":
-            #         try:
-            #             time_before = time_before_obs
-            #         except Exception:
-            #             time_before = def_time_before
-            #         if "highest_gust" not in data:
-            #             data["highest_gust"] = []
-            #         data["highest_gust"].append(obs.HighestGust().decode(next_group,
-            #             unit = data["wind_indicator"]["unit"] if data["wind_indicator"] is not None else None,
-            #             time_before = time_before
-            #         ))
-            #     elif j[2] in ["2", "3", "4"]:
-            #         try:
-            #             time_before = time_before_obs
-            #         except Exception:
-            #             time_before = def_time_before
-            #         if "mean_wind" not in data:
-            #             data["mean_wind"] = { "time_before": time_before }
-            #         attrs = [None, None, "highest", "mean", "lowest"]
-            #         data["mean_wind"][attrs[int(j[2])]] = obs.MeanWind().decode(next_group[3:5],
-            #             unit = data["wind_indicator"]["unit"] if data["wind_indicator"] is not None else None,
-            #             # time_before = time_before
-            #         )
-            #     elif j[2] in ["5"]:
-            #         # Add direction to highest gust/mean wind if necessary
-            #         if "highest_gust" not in data:
-            #             data["highest_gust"] = []
-            #         print(data["highest_gust"])
-            #     else:
-            #         raise NotImplementedError("{} is not implemented yet".format(next_group))
-            # elif j[1] == "2":
-            #     raise NotImplementedError("92xxx is not implemented yet")
-            # elif j[1] == "3":
-            #     if j[2] == "1":
-            #         try:
-            #             time_before = time_before_obs
-            #         except Exception:
-            #             time_before = def_time_before
-            #         data["snow_fall"] = obs.SnowFall().decode(next_group,
-            #             time_before = time_before
-            #         )
-            #     else:
-            #         raise NotImplementedError("93xxx is not implemented yet")
-            # elif j[1] == "4":
-            #     raise NotImplementedError("94xxx is not implemented yet")
-            # elif j[1] == "5":
-            #     raise NotImplementedError("95xxx is not implemented yet")
-            # elif j[1] == "6":
-            #     raise NotImplementedError("96xxx is not implemented yet")
-            # elif j[1] == "7":
-            #     raise NotImplementedError("97xxx is not implemented yet")
-            # elif j[1] == "8":
-            #     raise NotImplementedError("98xxx is not implemented yet")
-            # elif j[1] == "9":
-            #     raise NotImplementedError("99xxx is not implemented yet")
-
+                self.handle_not_implemented(g)
         return data
     def parseAirTemperature(self, group): # 1snTTT
         """
@@ -1496,7 +1092,7 @@ class SYNOP(pymetdecoder.Report):
 
         :param string group: SYNOP code to decode
         """
-        if not self._isGroupValid(group):
+        if not self._is_valid_group(group):
             raise pymetdecoder.DecodeError("{} is an invalid air temperature group".format(group))
 
         # Prepare the data
@@ -1510,7 +1106,7 @@ class SYNOP(pymetdecoder.Report):
 
         :param string group: SYNOP code to decode
         """
-        if not self._isGroupValid(group):
+        if not self._is_valid_group(group):
             logging.warning("{} is an invalid dewpoint temperature/relative humidity group".format(group))
             return
 
@@ -1542,7 +1138,7 @@ class SYNOP(pymetdecoder.Report):
 
         :param string group: SYNOP code to decode
         """
-        if not self._isGroupValid(group):
+        if not self._is_valid_group(group):
             logging.warning("{} is an invalid sea level pressure/geopotential group".format(group))
             return
 
@@ -1552,7 +1148,7 @@ class SYNOP(pymetdecoder.Report):
             self.data["seaLevelPressure"] = obs.pressure(group)
         elif a in ["1", "2", "5", "7", "8", "/"]:
             self.data["geopotential"] = obs.geopotential(group)
-    def _isGroupValid(self, group, length=5, allowSlashes=True, multipleGroups=False):
+    def _is_valid_group(self, group, length=5, allowSlashes=True, multipleGroups=False):
         """
         Internal function to check if group is valid. In most cases, a valid group
         is 5 alphanumeric characters and/or slashes
@@ -1586,3 +1182,8 @@ class SYNOP(pymetdecoder.Report):
                 self.country = "RU"
         except Exception:
             return
+    def handle_not_implemented(self, code):
+        """
+        Handle non-implemented codes
+        """
+        self.not_implemented.append(code)

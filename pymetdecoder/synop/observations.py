@@ -115,12 +115,12 @@ class Callsign(Observation):
                 "region": ct.CodeTable0161().decode(callsign[0:2]),
                 "value":  callsign
             }
-        elif re.match("^[A-Z\d]{3,}", callsign):
-            return { "value": callsign }
+        elif re.match("^[A-Za-z\d]{3,}", callsign):
+            return { "value": str(callsign).upper() }
         else:
             raise InvalidCode(callsign, "callsign")
     def _encode(self, data):
-        return data["value"]
+        return str(data["value"]).upper()
 class CloudDriftDirection(Observation):
     """
     Direction of cloud drift
@@ -543,7 +543,12 @@ class ImportantWeather(Observation):
     Amplification of weather phenomenon
     """
     _CODE_LEN = 2
-    _CODE_TABLE = ct.CodeTable4687
+    def _decode(self, raw, **kwargs):
+        use_4687 = kwargs.get("use_4687", False)
+        if use_4687:
+            self._CODE_TABLE = ct.CodeTable4687
+        else:
+            return { "value": int(raw), "_table": "4677" }
 class LocalPrecipitation(Observation):
     """
     Precipitation character and time of precipitation for Region I
@@ -814,7 +819,10 @@ class PressureTendency(Observation):
         _UNIT = "hPa"
         def _decode_convert(self, val, **kwargs):
             tendency = kwargs.get("tendency")
-            return (val / (10.0 if tendency["value"] < 5 else -10.0))
+            try:
+                return (val / (10.0 if tendency["value"] < 5 else -10.0))
+            except Exception:
+                return None
         def _encode_convert(self, val, **kwargs):
             return abs(val * 10)
 class Radiation(Observation):
@@ -883,6 +891,10 @@ class SeaLandIce(Observation):
     _CODE_LEN = 5
     _ENCODE_DEFAULT = "ICE /////"
     def _decode(self, group):
+        # If we only have one item in the ice group, then we can't do anything
+        if len(group) <= 1:
+            return None
+
         # Get ice groups
         ice_groups = group[1:]
 
@@ -1089,6 +1101,13 @@ class StationPosition(Observation):
         Q   = raw[6:7]  # Quadrant
         lon = raw[7:11] # Longitude
 
+        # Check both values are numeric, otherwise we can't get the position
+        try:
+            int(lat)
+            int(lon)
+        except:
+            raise InvalidCode(raw, "latitude/longitude")
+
         # Set values
         data["latitude"]  = self.Latitude().decode(lat, quadrant=Q)
         data["longitude"] = self.Longitude().decode(lon, quadrant=Q)
@@ -1116,6 +1135,15 @@ class StationPosition(Observation):
         return data
     def _encode(self, data, **kwargs):
         obs_type = kwargs.get("obs_type")
+
+        # If data is none, ensure we print out the correct number of groups
+        if data is None:
+            if obs_type == "BBXX":
+                return "///// /////"
+            elif obs_type == "OOXX":
+                return "///// ///// ///// /////"
+            else:
+                raise EncodeError("{} is not a valid observation type")
 
         # Initialise groups
         groups = []
@@ -1456,14 +1484,17 @@ class ValleyClouds(Observation):
 class VisibilityDirection(Observation):
     """
     Visiblity in a direction
-
-    98xxx - Visibility in a direction
     """
     _CODE_LEN = 3
     def _decode(self, group):
         # Get direction and visibility
         dir = group[2]
         vis = group[3:5]
+
+        # Check if direction is valid
+        if dir == "/":
+            logging.warning(InvalidCode(dir, "visibility direction"))
+            return None
 
         # If direction code is 9, it's variable visibility
         if dir == "9":
@@ -1505,9 +1536,22 @@ class Weather(Observation):
     _CODE_LEN = 2
     def _decode(self, group, **kwargs):
         time_before = kwargs.get("time_before")
+        w_type = kwargs.get("type")
+        if w_type == "present":
+            table = "4677"
+        elif w_type == "past":
+            table = "4561"
+        else:
+            raise ValueError("{} is not a valid weather type".format(w_type))
+
+        # If value is non-numeric, return None
+        try:
+            int(group)
+        except Exception:
+            return None
 
         # Initialise data
-        data = { "value": int(group) }
+        data = { "value": int(group), "_table": table }
         if time_before is not None:
             data["time_before_obs"] = time_before
 
@@ -1557,7 +1601,9 @@ class WetBulbTemperature(Observation):
         except Exception:
             sign = None
         temp = self.Temperature().decode(TTT, sign=sign)
-        if temp is not None:
+        if temp is None or temp["value"] is None:
+            return None
+        else:
             temp.update(status)
         return temp
     def _encode(self, data, **kwargs):
@@ -1569,15 +1615,16 @@ class WetBulbTemperature(Observation):
         _CODE_LEN = 1
         _CODE_TABLE = ct.CodeTable3855
     class Temperature(Observation):
-        _CODE = "TTT"
-        _DESCRIPTION = "wet bulb temperature"
         _CODE_LEN = 3
         _UNIT = "Cel"
         def _decode(self, raw, **kwargs):
             sign = kwargs.get("sign")
             return self._decode_value(raw, sign=sign)
         def _decode_convert(self, val, **kwargs):
-            factor = 10 * kwargs.get("sign")
+            sign = kwargs.get("sign")
+            if sign is None:
+                return None
+            factor = 10 * sign
             return val / factor
         def _encode_convert(self, val, **kwargs):
             return abs(val * 10)

@@ -54,7 +54,10 @@ class CodeTable(object):
             table = {}
             if hasattr(self, "_TABLE"):
                 table["_table"] = self._TABLE
-            return { **table, **self._decode(value, **kwargs) }
+            out_val = self._decode(value, **kwargs)
+            if out_val is None:
+                return None
+            return { **table, **out_val }
         except NotImplementedError as e:
             logging.error(str(e))
             sys.exit(1)
@@ -162,7 +165,7 @@ class CodeTable0161(CodeTable):
     def _decode(self, A1):
         # Check if given region is valid
         if re.match("(1[1-7]|2[1-6]|3[1-4]|4[1-8]|5[1-6]|6[1-6]|7[1-4])", A1):
-            return self._REGIONS[int(A1[0:1])]
+            return { "value": self._REGIONS[int(A1[0:1])] }
         else:
             raise ValueError(A1)
     def _encode(self, data):
@@ -355,7 +358,6 @@ class CodeTable0938(CodeTableLookup):
         None, "Very low on the horizon", None, "Less than 30 degrees above the horizon",
         None, None, None, "More than 30 degrees above the horizon"
     ]
-
 class CodeTable1004(CodeTable):
     """
     Elevation angle of the top of the cloud indicated by C
@@ -601,6 +603,8 @@ class CodeTable3552(CodeTable):
         R = int(R)
         if R == 9:
             unknown = True
+        elif R == 0:
+            return None
         else:
             (min, max) = self._RANGE[R]
             if max is None:
@@ -782,8 +786,8 @@ class CodeTable3855(CodeTable):
         { "sign":    1, "measured":  True, "iced": False },
         { "sign":   -1, "measured":  True, "iced": False },
         { "sign": None, "measured":  True, "iced": True  },
-        None,
-        None,
+        {},
+        {},
         { "sign":    1, "measured": False, "iced": False },
         { "sign":   -1, "measured": False, "iced": False },
         { "sign": None, "measured": False, "iced": True  }
@@ -1077,7 +1081,7 @@ class CodeTable4451(CodeTable):
         speedKMH["unit"] = "km/h"
 
         # Return values
-        return [speedKT, speedKMH]
+        return { "value": [speedKT, speedKMH] }
     def _encode(self, data):
         if isinstance(data, list):
             data = data[0]

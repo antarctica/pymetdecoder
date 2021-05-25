@@ -36,6 +36,10 @@ class InvalidCode(Exception):
     def __init__(self, val, desc):
         self.msg = "{} is not a valid code for {}".format(val, desc)
         super().__init__(self.msg)
+class InvalidGroup(Exception):
+    def __init__(self, group):
+        self.msg = "{} is not a valid group".format(group)
+        super().__init__(self.msg)
 ################################################################################
 # BASE CLASSES
 ################################################################################
@@ -46,7 +50,7 @@ class Report(object):
     :param message string: Message to parse
     """
     def __init__(self):
-        pass
+        self.not_implemented = []
     def decode(self, message):
         """
         Decode function
@@ -117,6 +121,8 @@ class Observation(object):
             logging.warning(str(e))
         except Exception as e:
             logging.warning(str(e))
+            # import traceback
+            # traceback.print_exc()
             raise DecodeError("Unable to decode group {}".format(raw))
     def encode(self, raw, **kwargs):
         """
@@ -149,7 +155,6 @@ class Observation(object):
         except conversion.ConversionError as e:
             logging.warning(str(e))
         except Exception as e:
-            print(str(e))
             logging.warning("No valid {}. Using {}".format(type(self).__name__, self._ENCODE_DEFAULT))
             if "group" in kwargs:
                 return "{}{}".format(kwargs.get("group"), self._ENCODE_DEFAULT)
@@ -217,41 +222,39 @@ class Observation(object):
         :returns: True if value is valid, False otherwise
         :rtype: boolean
         """
-        # Check if value is available. If not, it passes validity
-        if not self.is_available(value=value):
+        try:
+            # Check if value is available. If not, it passes validity
+            if not self.is_available(value=value):
+                return True
+
+            # If _VALID_VALUES present, use that to check
+            if hasattr(self, "_VALID_VALUES"):
+                if value in self._VALID_VALUES:
+                    return True
+                else:
+                    return False
+
+            # If _VALID_RANGE present, check if value is in range
+            if hasattr(self, "_VALID_RANGE"):
+                value = float(value)
+                if self._VALID_RANGE[0] <= value <= self._VALID_RANGE[1]:
+                    return True
+                else:
+                    return False
+
+            # If _VALID_REGEXP present, check value matches regexp
+            if hasattr(self, "_VALID_REGEXP"):
+                if re.match(self._VALID_REGEXP, value):
+                    return True
+                else:
+                    return False
+
+            # If we have reached this point, we can't validate. Therefore, assume it's valid
             return True
-
-        # If _VALID_VALUES present, use that to check
-        if hasattr(self, "_VALID_VALUES"):
-            if value in self._VALID_VALUES:
-                return True
-            else:
-                return False
-
-        # If _VALID_RANGE present, check if value is in range
-        if hasattr(self, "_VALID_RANGE"):
-            value = float(value)
-            if self._VALID_RANGE[0] <= value <= self._VALID_RANGE[1]:
-                return True
-            else:
-                return False
-
-        # If _VALID_REGEXP present, check value matches regexp
-        if hasattr(self, "_VALID_REGEXP"):
-            if re.match(self._VALID_REGEXP, value):
-                return True
-            else:
-                return False
-
-        # If we have reached this point, we can't validate. Therefore, assume it's valid
-        return True
-    # def set_value(self, value, attr="value"):
-    #     """
-    #     Sets "value" attribute. Must be implemented in subclass
-    #
-    #     :raises: NotImplementedError if called from base class
-    #     """
-    #     setattr(self, attr, value)
+        except:
+            # In the event of an exception (usually caused by non valid characters),
+            # assume value is invalid
+            return False
     def _decode_value(self, val, **kwargs):
         try:
             # Get unit
@@ -265,7 +268,7 @@ class Observation(object):
                 if hasattr(self, "_TABLE"):
                     table_opts["table"] = self._TABLE
                 out_val = self._CODE_TABLE(**table_opts).decode(val, **kwargs)
-                if self._CODE_TABLE.__name__ != "CodeTableSimple":
+                if self._CODE_TABLE.__name__ != "CodeTableSimple" and out_val is not None:
                     if isinstance(out_val, list):
                         for a in out_val:
                             a["_code"] = int(val)
@@ -273,6 +276,10 @@ class Observation(object):
                         out_val["_code"] = int(val)
             else:
                 out_val = val
+
+            # Return None if out_val is none
+            if out_val is None:
+                return None
 
             # Convert to int
             out_val = int(out_val) if not isinstance(out_val, (dict, list)) else out_val
@@ -285,6 +292,9 @@ class Observation(object):
             if unit is not None:
                 data["unit"] = unit
             return data
+        except ValueError as e:
+            logging.warning(InvalidCode(val, type(self).__name__))
+            return None
         except Exception as e:
             logging.warning(str(e))
             return None
