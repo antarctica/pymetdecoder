@@ -215,10 +215,6 @@ print(msg)
 # Returns AAXX 01004 88889 12782 61506 10094 20047 30111 40197 53007 60001 81541 333 81656 86070
 ```
 
-### Malformed reports
-
-The module will try to decode as much of a report as it can. Non-fatal problems (e.g. invalid codes) will emit a warning message and continue. Fatal problems will emit a `DecodeError` exception, which can be caught in a `try...except` block.
-
 Commonly seen attributes in the output dict are as follows:
 
 * `value` - The absolute value of the attribute
@@ -227,6 +223,10 @@ Commonly seen attributes in the output dict are as follows:
 * `unit` - The unit the value is measured in. The Unified Code for Units of Measure is used here (https://ucum.org/ucum.html)
 * `_table` - This is the code table used to look up the value
 * `_code` - The code value looked up in the code table. When encoding a message, if this attribute is present, it will use that, rather than trying to calculate it from the value
+
+### Malformed reports
+
+The module will try to decode as much of a report as it can. Non-fatal problems (e.g. invalid codes) will emit a warning message and continue. Fatal problems will emit a `DecodeError` exception, which can be caught in a `try...except` block.
 
 ## Known issues
 
