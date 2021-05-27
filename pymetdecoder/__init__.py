@@ -121,8 +121,6 @@ class Observation(object):
             logging.warning(str(e))
         except Exception as e:
             logging.warning(str(e))
-            # import traceback
-            # traceback.print_exc()
             raise DecodeError("Unable to decode group {}".format(raw))
     def encode(self, raw, **kwargs):
         """

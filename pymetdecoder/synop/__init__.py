@@ -11,10 +11,6 @@
 import sys, re, logging
 import pymetdecoder
 from . import observations as obs
-# from . import section0
-# from . import section1
-# from . import section2
-# from . import section3
 RADIATION_TYPES = [
     "positive_net", "negative_net", "global_solar",
     "diffused_solar", "downward_long_wave", "upward_long_wave",
@@ -287,10 +283,10 @@ class SYNOP(pymetdecoder.Report):
                     if (0 <= header <= 6) and group_5 is not None:
                         if group_5[2] == "3":
                             radiation_time = { "value": 1, "unit": "h" }
-                            radiation_unit = "kJm-2"
+                            radiation_unit = "kJ/m2"
                         elif group_5[1] == "5":
                             radiation_time = { "value": 24, "unit": "h" }
-                            radiation_unit = "Jcm-2"
+                            radiation_unit = "J/cm2"
                         radiation = obs.Radiation().decode(next_group[1:5],
                             unit = radiation_unit,
                             time_before = radiation_time
@@ -405,12 +401,13 @@ class SYNOP(pymetdecoder.Report):
 
             ### SECTION 4 ###
             if next_group == "444":
+                data["section4"] = []
                 next_group = next(groups)
                 last_header = None
-                logging.warning("444 not implemented yet")
                 while True:
                     if re.match("^(555)$", next_group):
                         break
+                    data["section4"].append(next_group)
                     next_group = next(groups)
             else:
                 if next_group != "555":
@@ -437,7 +434,11 @@ class SYNOP(pymetdecoder.Report):
                     data = self._parse_group_9(data, group_9, def_time_before)
             except UnboundLocalError as e:
                 pass
-            return data
+            # return data
+
+        # Add any not-implemented codes
+        if len(self.not_implemented) > 0:
+            data["_not_implemented"] = self.not_implemented
 
         # Return the data
         return data

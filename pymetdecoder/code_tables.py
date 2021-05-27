@@ -1068,8 +1068,8 @@ class CodeTable4451(CodeTable):
             speedKT  = { "min": 0, "max": 0, "quantifier": None }
             speedKMH = { "min": 0, "max": 0, "quantifier": None }
         elif vs == 9:
-            speedKT  = { "min": 40, "max": None, "quantifier": "isGreaterThan" }
-            speedKMH = { "min": 75, "max": None, "quantifier": "isGreaterThan" }
+            speedKT  = { "min": 40, "max": None, "quantifier": "isGreater" }
+            speedKMH = { "min": 75, "max": None, "quantifier": "isGreater" }
         else:
             KT  = self.decode_range(vs, self._KT_RANGE)
             KMH = self.decode_range(vs, self._KMH_RANGE)
