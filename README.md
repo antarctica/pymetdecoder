@@ -1,6 +1,6 @@
 # README
 
-This is a Python module which decodes meteorological reports (e.g. SYNOPs) into a Python dictionary. It can also take a Python dictionary and encode a meterological report from it.
+This is a Python module which decodes meteorological reports (e.g. SYNOPs) into a Python dictionary. It can also take a Python dictionary and encode a meteorological report from it.
 
 ## Currently supported
 
