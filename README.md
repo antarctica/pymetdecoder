@@ -16,7 +16,6 @@ To decode a SYNOP:
 
 ```python
 from pymetdecoder import synop as s
-from pymetdecoder import DecodeError
 
 synop = "AAXX 01004 88889 12782 61506 10094 20047 30111 40197 53007 60001 81541 333 81656 86070"
 output = s.SYNOP().decode(synop)
@@ -206,7 +205,6 @@ Re-encoding this dict gets back the original SYNOP:
 
 ```python
 from pymetdecoder import synop as s
-from pymetdecoder import DecodeError
 
 original = "AAXX 01004 88889 12782 61506 10094 20047 30111 40197 53007 60001 81541 333 81656 86070"
 synop = s.SYNOP()
