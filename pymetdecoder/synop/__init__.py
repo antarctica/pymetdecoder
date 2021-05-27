@@ -40,9 +40,11 @@ class SYNOP(pymetdecoder.Report):
                 data["callsign"] = obs.Callsign().decode(next(groups))
 
             # Get date, time and wind indictator
-            (obs_time, wind_indicator) = self._parseYYGGi(next(groups))
-            data["obs_time"] = obs_time
-            data["wind_indicator"] = wind_indicator
+            YYGGi = next(groups)
+            if not self._is_valid_group(YYGGi):
+                logging.warning(pymetdecoder.InvalidGroup(YYGGi))
+            data["obs_time"] = obs.ObservationTime().decode(YYGGi[0:4])
+            data["wind_indicator"] = obs.WindIndicator().decode(YYGGi[4])
 
             # Obtain the default time before observation, in accordance with
             # regulations 12.2.6.6.1 and 12.2.6.7.1
@@ -87,16 +89,28 @@ class SYNOP(pymetdecoder.Report):
 
             ### SECTION 1 ###
             # Get precipitation indicator, weather indicator, base of lowest cloud and visibility
-            (precip_ind, weather_ind, cloud_base, vis) = self._parseiihVV(next_group)
-            data["precipitation_indicator"] = precip_ind
-            data["weather_indicator"] = weather_ind
-            data["lowest_cloud_base"] = cloud_base
-            data["visibility"] = vis
+            if not self._is_valid_group(next_group):
+                logging.warning(pymetdecoder.InvalidGroup(next_group))
+                data["precipitation_indicator"] = None
+                data["weather_indicator"] = None
+                data["lowest_cloud_base"] = None
+                data["visibility"] = None
+            else:
+                data["precipitation_indicator"] = obs.PrecipitationIndicator().decode(next_group[0:1], country=self.country)
+                data["weather_indicator"] = obs.WeatherIndicator().decode(next_group[1:2])
+                data["lowest_cloud_base"] = obs.LowestCloudBase().decode(next_group[2:3])
+                data["visibility"] = obs.Visibility().decode(next_group[3:5])
 
             # Get cloud cover, wind direction and speed
-            (cloud_cover, surface_wind) = self._parseNddff(next(groups),
-                data["wind_indicator"]["unit"] if data["wind_indicator"] is not None else None
-            )
+            Nddff = next(groups)
+            (cloud_cover, surface_wind) = (None, None)
+            if not self._is_valid_group(Nddff):
+                logging.warning(pymetdecoder.InvalidGroup(Nddff))
+            else:
+                cloud_cover = obs.CloudCover().decode(Nddff[0:1])
+                surface_wind = obs.SurfaceWind().decode(Nddff[1:5])
+                if surface_wind is not None and surface_wind["speed"] is not None:
+                    surface_wind["speed"]["unit"] = data["wind_indicator"]["unit"] if data["wind_indicator"] is not None else None
             data["cloud_cover"] = cloud_cover
             data["surface_wind"] = surface_wind
 
@@ -810,83 +824,6 @@ class SYNOP(pymetdecoder.Report):
             elif header is not None and header < i:
                 next_group = next(groups)
         return (data, next_group)
-
-    def _parseYYGGi(self, group): # YYGGi
-        """
-        Parses the observation time and wind indicator group (YYGGi) and sets
-        the obsTime and windIndicator data values
-
-        :param string group: SYNOP code to decode
-        """
-        # Check group matches regular expression
-        if not self._is_valid_group(group):
-            raise pymetdecoder.DecodeError("{} is an invalid YYGGi group".format(group))
-            return (None, None)
-
-        # Get observation time and wind indicator
-        return (
-            obs.ObservationTime().decode(group[0:4]),
-            obs.WindIndicator().decode(group[4])
-        )
-    def _parseiihVV(self, group): # iihVV
-        """
-        Parses the precipitation and weather indicator and cloud base group (iihVV)
-        and sets the precipitationIndicator, weatherIndicator and lowestCloudBase
-        data values
-
-        :param string group: SYNOP code to decode
-        """
-        # Check group matches regular expression
-        if not self._is_valid_group(group):
-            logging.warning("{} is an invalid iihVV group".format(group))
-            return (None, None, None, None)
-
-        # Get precipitation, weather, lowest cloud and horizontal visibilty
-        return (
-            obs.PrecipitationIndicator().decode(group[0:1], country=self.country),
-            obs.WeatherIndicator().decode(group[1:2]),
-            obs.LowestCloudBase().decode(group[2:3]),
-            obs.Visibility().decode(group[3:5])
-        )
-    def _parseNddff(self, group, unit=None): # Nddff
-        """
-        Parses the cloud cover and surface wind group (Nddff) and sets the cloudCover
-        and surfaceWind data values
-
-        :param string group: SYNOP code to decode
-        """
-        if not self._is_valid_group(group):
-            logging.warning("{} is an invalid Nddff group".format(group))
-            return (None, None)
-
-        # Get cloud cover, wind direction and speed
-        cloud_cover  = obs.CloudCover().decode(group[0:1])
-        surface_wind = obs.SurfaceWind().decode(group[1:5])
-        if surface_wind is not None and surface_wind["speed"] is not None:
-            surface_wind["speed"]["unit"] = unit
-        return (cloud_cover, surface_wind)
-
-        # # Get total cloud cover (N)
-        # self.data["cloudCover"] = obs.cloud_cover(group[0:1])
-        #
-        # # Get wind direction (dd) and wind speed (ff)
-        # self.data["surfaceWind"] = obs.surface_wind(group[1:5])
-        # if hasattr(self.data["surfaceWind"], "speed") and hasattr(self.data["windIndicator"], "unit"):
-        #     self.data["surfaceWind"].speed.setUnit(self.data["windIndicator"].unit)
-    def _parse_s1_weather(self, group, data): # 7wwWW
-        if "weather_indicator" in data:
-            try:
-                if data["weather_indicator"]["value"] not in [1, 4, 7]:
-                    logging.warning("Group 7 codes found, despite reported as being omitted (ix = {})".format(data["weather_indicator"]["value"]))
-            except AttributeError:
-                pass
-
-            present_weather = obs.Weather().decode(group[1:3], type="present")
-            past_weather = [
-                obs.Weather().decode(group[3:4], type="past"),
-                obs.Weather().decode(group[4:5], type="past")
-            ]
-            return (present_weather, past_weather)
     def _parse_group_9(self, data, group_9, def_time_before):
         """
         Parses group 9 codes
@@ -1086,69 +1023,6 @@ class SYNOP(pymetdecoder.Report):
             else:
                 self.handle_not_implemented(g)
         return data
-    def parseAirTemperature(self, group): # 1snTTT
-        """
-        Parses the air temperature group (1snTTT) and sets the air temperature
-        data value
-
-        :param string group: SYNOP code to decode
-        """
-        if not self._is_valid_group(group):
-            raise pymetdecoder.DecodeError("{} is an invalid air temperature group".format(group))
-
-        # Prepare the data
-        if "temperature" not in self.data:
-            self.data["temperature"] = {}
-        self.data["temperature"]["air"] = obs.temperature(group)
-    def parseDewpointHumidity(self, group): # 2snTTT or 29UUU
-        """
-        Parses the dewpoint temperature/relative humidity group (2snTTT or 29UUU)
-        and sets the relativeHumidity and/or dewpoint temperature data values
-
-        :param string group: SYNOP code to decode
-        """
-        if not self._is_valid_group(group):
-            logging.warning("{} is an invalid dewpoint temperature/relative humidity group".format(group))
-            return
-
-        # Get sign and temperature
-        sn  = group[1:2]
-        TTT = group[2:5]
-
-        # If sn is 9, we're dealing with relative humidity.
-        # Otherwise, parse the temperature
-        if sn == "9":
-            data = { "available": True, "raw": group }
-            if TTT == "///":
-                data["available"] = False
-            else:
-                TTT = int(TTT)
-                if TTT > 100:
-                    raise pymetdecoder.DecodeError("{} is not a valid relative humidity".format(TTT))
-                data["unit"] = "%"
-                data["value"] = TTT
-            self.data["relativeHumidity"] = data
-        else:
-            if "temperature" not in self.data:
-                self.data["temperature"] = {}
-            self.data["temperature"]["dewpoint"] = obs.temperature(group)
-    def parseSeaLevelPressureGeopotential(self, group): # 4PPPP or 4ahhh
-        """
-        Parses the sea level pressure/geopotential group (4PPPP or 4ahhh) and sets
-        the seaLevelPressure and/or geopotential data values
-
-        :param string group: SYNOP code to decode
-        """
-        if not self._is_valid_group(group):
-            logging.warning("{} is an invalid sea level pressure/geopotential group".format(group))
-            return
-
-        # Determine if this is pressure or geopotential height
-        a = group[1]
-        if a in ["0", "9"]:
-            self.data["seaLevelPressure"] = obs.pressure(group)
-        elif a in ["1", "2", "5", "7", "8", "/"]:
-            self.data["geopotential"] = obs.geopotential(group)
     def _is_valid_group(self, group, length=5, allowSlashes=True, multipleGroups=False):
         """
         Internal function to check if group is valid. In most cases, a valid group

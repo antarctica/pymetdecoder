@@ -331,21 +331,6 @@ class ObsEncoder(json.JSONEncoder):
 ################################################################################
 # FUNCTIONS
 ################################################################################
-# def encode_attribute(data, attr, len, null_char="/"):
-#     if attr in data and data[attr] is not None:
-#         return data[attr]
-#     else:
-#         return null_char * len
-# def encode_attribute_with_unit(data, attr, len, def_unit, unit_type, null_char="/"):
-#     try:
-#         if attr in data and data[attr] is not None:
-#             val  = data[attr]["value"]
-#             unit = data[attr]["unit"] if "unit" in data[attr] else def_unit
-#             return ("{:0" + str(len) + "d}").format(conversion.convert(val, unit, def_unit, unit_type))
-#         else:
-#             return null_char * len
-#     except Exception:
-#         return null_char * len
 def decode_attribute(val, unit=None, post_func=None):
     try:
         # Convert to int
@@ -405,9 +390,4 @@ def encode_attribute(data, attr, len, def_unit=None, unit_type=None, null_char="
         # Return code
         return ("{:0" + str(len) + "d}").format(int(out_val))
     except Exception as e:
-        # print(str(e))
         return null_output
-################################################################################
-# IMPORTS
-################################################################################
-# from . import synop
