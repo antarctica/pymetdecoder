@@ -279,6 +279,7 @@ class SYNOP(pymetdecoder.Report):
             ### SECTION 3 ###
             group_9 = []
             group_5 = None
+            group_6 = 0
             if next_group == "333":
                 next_group = next(groups)
                 last_header = None
@@ -295,6 +296,14 @@ class SYNOP(pymetdecoder.Report):
                         break
 
                     if (0 <= header <= 6) and group_5 is not None:
+                        # Determine if we're expecting group 3 precipitation
+                        if next_group.startswith("6") and data["precipitation_indicator"]["in_group_3"]:
+                            data["precipitation_s3"] = obs.Precipitation().decode(next_group, tenths=False)
+                            # group_5 = None
+                            group_6 += 1
+
+                            # print(data["precipitation_indicator"]["in_group_3"])
+
                         if group_5[2] == "3":
                             radiation_time = { "value": 1, "unit": "h" }
                             radiation_unit = "kJ/m2"
@@ -377,6 +386,7 @@ class SYNOP(pymetdecoder.Report):
                         elif header == 6:
                             # Check that we are expecting precipitation information in section 3
                             # If not, raise error
+                            group_6 += 1
                             try:
                                 if "precipitation_indicator" not in data or data["precipitation_indicator"] is None:
                                     logging.warning("No precipitation indicator information found")
@@ -407,6 +417,12 @@ class SYNOP(pymetdecoder.Report):
                                 group_9.append(next_group)
                     last_header = header
                     next_group = next(groups)
+
+                # Remove unneeded radiation groups. This is not an elegant solution,
+                # but it works
+                if group_6 == 1:
+                    if "precipitation_s3" in data and "radiation" in data:
+                        del(data["radiation"])
 
             # Parse group 9 before moving on
             if len(group_9) > 0:
