@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setup(
     name             = "pymetdecoder",
-    version          = "0.1.0",
+    version          = "0.1.1",
     author           = "Tim Barnes",
     author_email     = "tdba@bas.ac.uk",
     description      = "Python module to decode/encode met reports e.g. SYNOPs",
