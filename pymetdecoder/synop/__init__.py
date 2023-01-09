@@ -434,7 +434,7 @@ class SYNOP(pymetdecoder.Report):
                 if len(group_9) > 0:
                     data = self._parse_group_9(data, group_9, def_time_before)
 
-                # interpret group 5 stuff
+                # Interpret radiation, sunshine and precipitation from section 3
                 for m in msg_5:
                     if m.startswith("55"):
                         g5 = m
