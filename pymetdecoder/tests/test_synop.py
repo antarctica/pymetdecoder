@@ -13,7 +13,7 @@ from pymetdecoder import synop as s
 ################################################################################
 # CLASSES
 ################################################################################
-class SynopTest:
+class BaseTestSynop:
     """
     Base class for Synop tests
     """
@@ -25,8 +25,10 @@ class SynopTest:
         yield data
     def pytest_generate_tests(self, metafunc):
         data = s.SYNOP().decode(self.SYNOP)
+
         if metafunc.function.__name__ == "test_values":
-            metafunc.parametrize("attr", list(data.keys()))
+            attrs = self.TEST_ATTRS if hasattr(self, "TEST_ATTRS") else list(data.keys())
+            metafunc.parametrize("attr", attrs)
 
     def test_values(self, decoded, attr):
         if attr not in self.expected:
@@ -37,8 +39,29 @@ class SynopTest:
     def test_reencode(self, decoded):
         encoded = s.SYNOP().encode(decoded)
         assert encoded == self.SYNOP, "Re-encoded SYNOP does not match original"
+class BaseTestSynopRadiationPrecip(BaseTestSynop):
+    """
+    Tests we get correct radiation and precipitation. We need to test multiple
+    combinations due to the complexity
+    """
+    # SYNOP = "AAXX 01004 89022 22782 61506 30111 333 55055 01234 10239 60123"
+    TEST_ATTRS = ["sunshine", "radiation", "precipitation_s3"]
+    # expected = {
+    #     "precipitation_s3": {
+    #         "amount": { "_table": "3590", "value": 12, "quantifier": None, "trace": False, "_code": 12, "unit": "mm" },
+    #         "time_before_obs": { "_table": "4019", "value": 18, "unit": "h", "_code": 3 }
+    #     },
+    #     "radiation": {
+    #         "positive_net": [
+    #             { "value": 1234, "unit": "J/cm2", "time_before_obs": { "value": 24, "unit": "h" }}
+    #         ],
+    #         "negative_net": [
+    #             { "value": 239, "unit": "J/cm2", "time_before_obs": { "value": 24, "unit": "h" }}
+    #         ]
+    #     }
+    # }
 
-class TestSynopAAXX(SynopTest):
+class TestSynopAAXX(BaseTestSynop):
     """
     Tests a simple AAXX Synop
     """
@@ -104,7 +127,7 @@ class TestSynopAAXX(SynopTest):
             "temperature": { "value": -1.0, "unit": "Cel" }
         }
     }
-class TestSynopBBXX(SynopTest):
+class TestSynopBBXX(BaseTestSynop):
     """
     Tests a simple BBXX synop
     """
@@ -203,7 +226,7 @@ class TestSynopBBXX(SynopTest):
     def test_reencode(self, decoded):
         # Skip this test because it contains a "_not_implemented"
         pytest.skip()
-class TestSynopOOXX(SynopTest):
+class TestSynopOOXX(BaseTestSynop):
     """
     Tests a simple OOXX synop
     """
@@ -250,7 +273,7 @@ class TestSynopOOXX(SynopTest):
             "minute": { "value":  0 }
         }
     }
-class TestSynopAAXXAntarctic(SynopTest):
+class TestSynopAAXXAntarctic(BaseTestSynop):
     """
     Tests a AAXX synop with Antarctic specific options (plus some additional options
     that couldn't be tested in the simple example)
@@ -294,7 +317,7 @@ class TestSynopAAXXAntarctic(SynopTest):
             "speed": { "value": 68, "unit": "KT" }
         }
     }
-class TestSynopAAXXRegionI(SynopTest):
+class TestSynopAAXXRegionI(BaseTestSynop):
     """
     Tests a AAXX synop with Region I specific options
 
@@ -340,7 +363,160 @@ class TestSynopAAXXRegionI(SynopTest):
             "time":      { "_table": "168", "min": 3, "max": 4, "quantifier": None, "unit": "h", "_code": 4 }
         }
     }
-class TestSynopBBXXAlternative(SynopTest):
+class TestSynopAAXX1Rad1Precip(BaseTestSynopRadiationPrecip):
+    """
+    Tests we get correct radiation and precipitation when section 3 precipitation
+    is required and 1 radiation and 1 6xxxx group are specified.
+
+    Should return 1 radiation and section 3 precipitation entry
+    """
+    SYNOP = "AAXX 01004 89022 22782 61506 30111 333 55032 01234 60123"
+    expected = {
+        "sunshine": [
+            { "amount": { "value": 3.2, "unit": "h" }, "duration": { "value": 24, "unit": "h" }}
+        ],
+        "precipitation_s3": {
+            "amount": { "_table": "3590", "value": 12, "quantifier": None, "trace": False, "_code": 12, "unit": "mm" },
+            "time_before_obs": { "_table": "4019", "value": 18, "unit": "h", "_code": 3 }
+        },
+        "radiation": {
+            "positive_net": [
+                { "value": 1234, "unit": "J/cm2", "time_before_obs": { "value": 24, "unit": "h" }}
+            ]
+        }
+    }
+class TestSynopAAXX2RadPrecip(BaseTestSynopRadiationPrecip):
+    """
+    Tests we get correct radiation and precipitation when section 3 precipitation
+    is required and 2 radiation and 1 6xxxx groups are specified.
+
+    Should return 2 radiation entries and section 3 precipitation
+    """
+    SYNOP = "AAXX 01004 89022 22782 61506 30111 333 55055 01234 10329 60123"
+    expected = {
+        "sunshine": [
+            { "amount": { "value": 5.5, "unit": "h" }, "duration": { "value": 24, "unit": "h" }}
+        ],
+        "precipitation_s3": {
+            "amount": { "_table": "3590", "value": 12, "quantifier": None, "trace": False, "_code": 12, "unit": "mm" },
+            "time_before_obs": { "_table": "4019", "value": 18, "unit": "h", "_code": 3 }
+        },
+        "radiation": {
+            "positive_net": [
+                { "value": 1234, "unit": "J/cm2", "time_before_obs": { "value": 24, "unit": "h" }}
+            ],
+            "negative_net": [
+                { "value": 329, "unit": "J/cm2", "time_before_obs": { "value": 24, "unit": "h" }}
+            ]
+        }
+    }
+class TestSynopAAXXRadPrecip2Group6(BaseTestSynopRadiationPrecip):
+    """
+    Tests we get correct radiation and precipitation when section 3 precipitation
+    is required and 2 6xxxx groups are specified
+
+    Should return 2 radiation entries and 1 section 3 precipitation entry
+    """
+    SYNOP = "AAXX 01004 89022 22782 61506 30111 333 55055 01234 60329 60123"
+    expected = {
+        "sunshine": [
+            { "amount": { "value": 5.5, "unit": "h" }, "duration": { "value": 24, "unit": "h" }}
+        ],
+        "precipitation_s3": {
+            "amount": { "_table": "3590", "value": 12, "quantifier": None, "trace": False, "_code": 12, "unit": "mm" },
+            "time_before_obs": { "_table": "4019", "value": 18, "unit": "h", "_code": 3 }
+        },
+        "radiation": {
+            "positive_net": [
+                { "value": 1234, "unit": "J/cm2", "time_before_obs": { "value": 24, "unit": "h" }}
+            ],
+            "short_wave": [
+                { "value": 329, "unit": "J/cm2", "time_before_obs": { "value": 24, "unit": "h" }}
+            ]
+        }
+    }
+class TestSynopAAXXNoS3PrecipWith6(BaseTestSynopRadiationPrecip):
+    """
+    Tests we get correct radiation and precipitation when section 3 precipitation
+    is not required and 1 radiation and 1 6xxxx groups are specified
+
+    Should return 2 radiation entries
+    """
+    SYNOP = "AAXX 01004 89022 12782 61506 30111 333 55055 01234 60329"
+    TEST_ATTRS = ["radiation"]
+    expected = {
+        "radiation": {
+            "positive_net": [
+                { "value": 1234, "unit": "J/cm2", "time_before_obs": { "value": 24, "unit": "h" }}
+            ],
+            "short_wave": [
+                { "value": 329, "unit": "J/cm2", "time_before_obs": { "value": 24, "unit": "h" }}
+            ]
+        }
+    }
+class TestSynopAAXXNoS3PrecipWithNo6(BaseTestSynopRadiationPrecip):
+    """
+    Tests we get correct radiation and precipitation when section 3 precipitation
+    is not required and 2 radiation groups are specified
+
+    Should return 2 radiation entries
+    """
+    SYNOP = "AAXX 01004 89022 12782 61506 30111 333 55055 01234 30801"
+    TEST_ATTRS = ["radiation"]
+    expected = {
+        "radiation": {
+            "positive_net": [
+                { "value": 1234, "unit": "J/cm2", "time_before_obs": { "value": 24, "unit": "h" }}
+            ],
+            "diffused_solar": [
+                { "value": 801, "unit": "J/cm2", "time_before_obs": { "value": 24, "unit": "h" }}
+            ]
+        }
+    }
+class TestSynopAAXXMultipleRadiationWithPrecip(BaseTestSynopRadiationPrecip):
+    """
+    Tests we get correct radiation when section 3 precipitation is required and
+    multiple different radiation groups are specified
+    """
+    SYNOP = "AAXX 01004 89022 22782 61506 30111 333 55055 01234 60300 55301 00331 60001 60123"
+    expected = {
+        "sunshine": [
+            { "amount": { "value": 5.5, "unit": "h" }, "duration": { "value": 24, "unit": "h" }},
+            { "amount": { "value": 0.1, "unit": "h" }, "duration": { "value":  1, "unit": "h" }}
+        ],
+        "radiation": {
+            "positive_net": [
+                { "value": 1234, "unit": "J/cm2", "time_before_obs": { "value": 24, "unit": "h" }},
+                { "value":  331, "unit": "kJ/m2", "time_before_obs": { "value":  1, "unit": "h" }}
+            ],
+            "short_wave": [
+                { "value": 300, "unit": "J/cm2", "time_before_obs": { "value": 24, "unit": "h" }},
+                { "value":   1, "unit": "kJ/m2", "time_before_obs": { "value":  1, "unit": "h" }}
+            ]
+        },
+        "precipitation_s3": {
+            "amount": { "_table": "3590", "value": 12, "quantifier": None, "trace": False, "_code": 12, "unit": "mm" },
+            "time_before_obs": { "_table": "4019", "value": 18, "unit": "h", "_code": 3 }
+        }
+    }
+class TestSynopAAXXNoSunshine(BaseTestSynopRadiationPrecip):
+    """
+    Tests SYNOP with no sunshine is decoded and encoded correctly
+    """
+    SYNOP = "AAXX 01004 89022 22782 61506 30111 333 55/// 20884 60192"
+    expected = {
+        "sunshine": [None],
+        "radiation": {
+            "global_solar": [
+                { "value": 884, "unit": "J/cm2", "time_before_obs": { "value": 24, "unit": "h" }}
+            ]
+        },
+        "precipitation_s3": {
+            "amount": { "_table": "3590", "value": 19, "quantifier": None, "trace": False, "_code": 19, "unit": "mm" },
+            "time_before_obs": { "_table": "4019", "value": 12, "unit": "h", "_code": 2 }
+        }
+    }
+class TestSynopBBXXAlternative(BaseTestSynop):
     """
     Tests a BBXX synop with alternative options:
 

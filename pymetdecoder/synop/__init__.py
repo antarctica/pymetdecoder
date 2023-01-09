@@ -280,6 +280,7 @@ class SYNOP(pymetdecoder.Report):
             group_9 = []
             group_5 = None
             group_6 = 0
+            msg_5   = []
             if next_group == "333":
                 next_group = next(groups)
                 last_header = None
@@ -296,40 +297,9 @@ class SYNOP(pymetdecoder.Report):
                         break
 
                     if (0 <= header <= 6) and group_5 is not None:
-                        # Determine if we're expecting group 3 precipitation
-                        if next_group.startswith("6") and data["precipitation_indicator"]["in_group_3"]:
-                            data["precipitation_s3"] = obs.Precipitation().decode(next_group, tenths=False)
-                            # group_5 = None
-                            group_6 += 1
-
-                            # print(data["precipitation_indicator"]["in_group_3"])
-
-                        if group_5[2] == "3":
-                            radiation_time = { "value": 1, "unit": "h" }
-                            radiation_unit = "kJ/m2"
-                        elif group_5[1] == "5":
-                            radiation_time = { "value": 24, "unit": "h" }
-                            radiation_unit = "J/cm2"
-                        radiation = obs.Radiation().decode(next_group[1:5],
-                            unit = radiation_unit,
-                            time_before = radiation_time
-                        )
-                        matches = re.match("55[45]0([78])", group_5)
-                        if matches:
-                            if matches.group(1) == "7":
-                                radiation_type = "net_short_wave"
-                            else:
-                                radiation_type = "direct_solar"
-                        else:
-                            radiation_type = RADIATION_TYPES[header]
-                        group_5 = None
-                        if "radiation" not in data:
-                            data["radiation"] = {}
-                        if radiation_type not in data["radiation"]:
-                            data["radiation"][radiation_type] = []
-                        data["radiation"][radiation_type].append(radiation)
-                        # logging.warning("parse group 5: {} (last: {})".format(next_group, group_5))
-                        # group_5 = None
+                        # Append sunshine and radiation groups to a separate list
+                        # to deal with later
+                        msg_5.append(next_group)
                     else:
                         if header == 0:
                             if data["region"] is None:
@@ -366,17 +336,18 @@ class SYNOP(pymetdecoder.Report):
                                     data["temperature_change"] = obs.TemperatureChange().decode(next_group[2:5])
                                 elif j[1] == "5": # 55xxx
                                     if j[2] in ["0", "1", "2", "3"]: # 55[0123]xx
-                                        data["sunshine"] = obs.Sunshine().decode(next_group)
                                         group_5 = next_group
                                     elif j[2] in ["4", "5"]: # 55[45]xx
                                         if next_group[3:5] not in ["07", "08"]:
                                             raise pymetdecoder.InvalidCode(next_group, "5jjjj")
                                         group_5 = next_group
                                     elif j[2] == "/": # 55/xx
-                                        data["sunshine"] = obs.Sunshine().decode(next_group)
+                                        # This is fine, but we don't want to raise an error
+                                        pass
                                     else:
                                         raise pymetdecoder.InvalidCode(next_group, "section 3 group 5")
                                     group_5 = next_group
+                                    msg_5.append(group_5)
                                 elif j[1] in ["6"]: # 56xxx
                                     data["cloud_drift_direction"] = obs.CloudDriftDirection().decode(next_group)
                                 elif j[1] in ["7"]: # 57xxx
@@ -462,6 +433,47 @@ class SYNOP(pymetdecoder.Report):
                     data["sea_land_ice"] = obs.SeaLandIce().decode(ice_groups)
                 if len(group_9) > 0:
                     data = self._parse_group_9(data, group_9, def_time_before)
+
+                # interpret group 5 stuff
+                for m in msg_5:
+                    if m.startswith("55"):
+                        g5 = m
+                        if "sunshine" not in data:
+                            data["sunshine"] = []
+                        data["sunshine"].append(obs.Sunshine().decode(m))
+                    else:
+                        if g5[2] == "3":
+                            radiation_time = { "value": 1, "unit": "h" }
+                            radiation_unit = "kJ/m2"
+                        elif g5[1] == "5":
+                            radiation_time = { "value": 24, "unit": "h" }
+                            radiation_unit = "J/cm2"
+                        radiation = obs.Radiation().decode(m[1:5],
+                            unit = radiation_unit,
+                            time_before = radiation_time
+                        )
+                        matches = re.match("55[45]0([78])", g5)
+                        if matches:
+                            if matches.group(1) == "7":
+                                radiation_type = "net_short_wave"
+                            else:
+                                radiation_type = "direct_solar"
+                        else:
+                            radiation_type = RADIATION_TYPES[int(m[0])]
+                        if "radiation" not in data:
+                            data["radiation"] = {}
+                        if radiation_type not in data["radiation"]:
+                            data["radiation"][radiation_type] = []
+                        data["radiation"][radiation_type].append(radiation)
+                if len(msg_5) > 0 and msg_5[-1].startswith("6") and data["precipitation_indicator"]["in_group_3"]:
+                    data["precipitation_s3"] = obs.Precipitation().decode(next_group, tenths=False)
+                    if "short_wave" in data["radiation"]:
+                        if len(data["radiation"]["short_wave"]) == 1:
+                            del(data["radiation"]["short_wave"])
+                        else:
+                            del(data["radiation"]["short_wave"][-1])
+                    # if len(data["radiation"]["short_wave"]):
+                    #     del(data["radiation"]["short_wave"][-1])
             except UnboundLocalError as e:
                 pass
             # return data
@@ -636,14 +648,15 @@ class SYNOP(pymetdecoder.Report):
         if "temperature_change" in data:
             s3_groups.append(obs.TemperatureChange().encode(data["temperature_change"], group="54"))
         if "sunshine" in data:
-            sunshine = obs.Sunshine().encode(data["sunshine"], group="55")
-            s3_groups.append(sunshine)
-            if "radiation" in data:
-                radiation_time = 1 if sunshine[3] == "3" else 24
-                for r, rad in data["radiation"].items():
-                    for x in rad:
-                        if "time_before_obs" in x and x["time_before_obs"]["value"] == radiation_time:
-                            s3_groups.append(obs.Radiation().encode(x, group=str(RADIATION_TYPES.index(r))))
+            for s in data["sunshine"]:
+                sunshine = obs.Sunshine().encode(s, group="55")
+                s3_groups.append(sunshine)
+                if "radiation" in data:
+                    radiation_time = 1 if sunshine[2] == "3" else 24
+                    for r, rad in data["radiation"].items():
+                        for x in rad:
+                            if "time_before_obs" in x and x["time_before_obs"]["value"] == radiation_time:
+                                s3_groups.append(obs.Radiation().encode(x, group=str(RADIATION_TYPES.index(r))))
         if "radiation" in data and "sunshine" not in data:
             for r, rad in data["radiation"].items():
                 for x in rad:
