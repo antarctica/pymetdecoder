@@ -121,6 +121,33 @@ class Callsign(Observation):
             raise InvalidCode(callsign, "callsign")
     def _encode(self, data):
         return str(data["value"]).upper()
+class CloudBaseBelowStationLevel(Observation):
+    """
+    Clouds with tops below station level (section 4)
+    """
+    _CODE_LEN = 5
+    class Altitude(Observation):
+        _CODE_LEN = 2
+        def _decode(self, HH):
+            return {
+                "value": int(HH) * 100,
+                "quantifier": "isGreaterOrEqual" if int(HH) == 99 else None,
+                "unit": "m"
+            }
+        def _encode(self, data):
+            value = int(data["value"] / 100)
+            if value > 99:
+                value = 99
+            return "{:02d}".format(value)
+    class Description(Observation):
+        _CODE_LEN = 1
+        _CODE_TABLE = ct.CodeTable0552
+    _COMPONENTS = [
+        ("cloud_cover", 0, 1, CloudCover),
+        ("genus", 1, 1, CloudGenus),
+        ("upper_surface_altitude", 2, 2, Altitude),
+        ("description", 4, 1, Description)
+    ]
 class CloudDriftDirection(Observation):
     """
     Direction of cloud drift

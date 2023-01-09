@@ -391,9 +391,9 @@ class SYNOP(pymetdecoder.Report):
 
                 # Remove unneeded radiation groups. This is not an elegant solution,
                 # but it works
-                if group_6 == 1:
-                    if "precipitation_s3" in data and "radiation" in data:
-                        del(data["radiation"])
+                # if group_6 == 1:
+                #     if "precipitation_s3" in data and "radiation" in data:
+                #         del(data["radiation"])
 
             # Parse group 9 before moving on
             if len(group_9) > 0:
@@ -402,13 +402,13 @@ class SYNOP(pymetdecoder.Report):
 
             ### SECTION 4 ###
             if next_group == "444":
-                data["section4"] = []
+                data["cloud_base_below_station"] = []
                 next_group = next(groups)
-                last_header = None
+                # last_header = None
                 while True:
                     if re.match("^(555)$", next_group):
                         break
-                    data["section4"].append(next_group)
+                    data["cloud_base_below_station"].append(obs.CloudBaseBelowStationLevel().decode(next_group))
                     next_group = next(groups)
             else:
                 if next_group != "555":
@@ -799,9 +799,11 @@ class SYNOP(pymetdecoder.Report):
             groups.extend(["333"] + s3_groups)
 
         ### SECTION 4
-        if "section4" in data:
-            groups.extend(["444"] + data["section4"])
-            
+        if "cloud_base_below_station" in data:
+            groups.append("444")
+            for d in data["cloud_base_below_station"]:
+                groups.append(obs.CloudBaseBelowStationLevel().encode(d))
+
         ### SECTION 5
         if "section5" in data:
             groups.extend(["555"] + data["section5"])

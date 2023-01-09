@@ -365,9 +365,9 @@ class TestSynopAAXXRegionI(BaseTestSynop):
     }
 class TestSynopAAXXSection4(BaseTestSynop):
     """
-    Tests that section 4 groups are added to the "section4" key
+    Tests that section 4 groups are added to the "cloud_base_below_station" key
     """
-    SYNOP = "AAXX 01004 89022 32782 61506 30111 333 10178 444 21053"
+    SYNOP = "AAXX 01004 89022 32782 61506 30111 333 10178 444 21053 34810"
     expected = {
         "station_type": { "value": "AAXX" },
         "obs_time": {
@@ -398,7 +398,17 @@ class TestSynopAAXXSection4(BaseTestSynop):
         },
         "station_pressure": { "value": 1011.1, "unit": "hPa" },
         "maximum_temperature": { "value": 17.8, "unit": "Cel" },
-        "section4": ["21053"]
+        "cloud_base_below_station": [{
+            "cloud_cover": { "_table": "2700", "value": 2, "obscured": False, "unit": "okta", "_code": 2 },
+            "genus": { "_table": "0500", "value": "Cc", "_code": 1 },
+            "upper_surface_altitude": { "value": 500, "quantifier": None, "unit": "m" },
+            "description": { "_table": "0552", "value": "Broken cloud - large breaks (flat tops)", "_code": 3 }
+        },{
+            "cloud_cover": { "_table": "2700", "value": 3, "obscured": False, "unit": "okta", "_code": 3 },
+            "genus": { "_table": "0500", "value": "As", "_code": 4 },
+            "upper_surface_altitude": { "value": 8100, "quantifier": None, "unit": "m" },
+            "description": { "_table": "0552", "value": "Isolated cloud or fragments of cloud", "_code": 0 }
+        }]
     }
 class TestSynopAAXX1Rad1Precip(BaseTestSynopRadiationPrecip):
     """

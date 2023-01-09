@@ -201,6 +201,23 @@ class CodeTable0521(CodeTableLookup):
         "Clouds from fires",
         "Clouds from volcanic eruptions"
     ]
+class CodeTable0552(CodeTableLookup):
+    """
+    Description of the top of cloud whose base is below the level of the station
+    """
+    _TABLE = "0552"
+    _VALUES = [
+        "Isolated cloud or fragments of cloud",
+        "Continuous cloud (flat tops)",
+        "Broken cloud - small breaks (flat tops)",
+        "Broken cloud - large breaks (flat tops)",
+        "Continuous cloud (undulating tops)",
+        "Broken cloud - small breaks (undulating tops)",
+        "Broken cloud - large breaks (undulating tops)",
+        "Continuous or almost continuous waves with towering clouds above the top layer",
+        "Groups of waves with towering clouds above the top of the layer",
+        "Two or more layers at different levels"
+    ]
 class CodeTable0700(CodeTable):
     """
     Direction or bearing in one figure
