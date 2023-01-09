@@ -363,6 +363,43 @@ class TestSynopAAXXRegionI(BaseTestSynop):
             "time":      { "_table": "168", "min": 3, "max": 4, "quantifier": None, "unit": "h", "_code": 4 }
         }
     }
+class TestSynopAAXXSection4(BaseTestSynop):
+    """
+    Tests that section 4 groups are added to the "section4" key
+    """
+    SYNOP = "AAXX 01004 89022 32782 61506 30111 333 10178 444 21053"
+    expected = {
+        "station_type": { "value": "AAXX" },
+        "obs_time": {
+            "day":  { "value": 1 },
+            "hour": { "value": 0 }
+        },
+        "wind_indicator": { "value": 4, "unit": "KT", "estimated": False },
+        "station_id": { "value": "89022" },
+        "region": { "value": "Antarctic" },
+        "precipitation_indicator": {
+            "value": 3, "in_group_1": False, "in_group_3": False
+        },
+        "weather_indicator": {
+            "value": 2, "automatic": False
+        },
+        "lowest_cloud_base": {
+            "_table": "1600", "min": 1500, "max": 2000, "quantifier": None, "_code": 7, "unit": "m"
+        },
+        "visibility": {
+            "_table": "4377", "value": 40000, "quantifier": None, "use90": False, "_code": 82, "unit": "m"
+        },
+        "cloud_cover": {
+            "_table": "2700", "value": 6, "obscured": False, "_code": 6, "unit": "okta"
+        },
+        "surface_wind": {
+            "direction": { "_table": "0877", "value": 150, "varAllUnknown": False, "calm": False, "_code": 15, "unit": "deg" },
+            "speed": { "value": 6, "unit": "KT" }
+        },
+        "station_pressure": { "value": 1011.1, "unit": "hPa" },
+        "maximum_temperature": { "value": 17.8, "unit": "Cel" },
+        "section4": ["21053"]
+    }
 class TestSynopAAXX1Rad1Precip(BaseTestSynopRadiationPrecip):
     """
     Tests we get correct radiation and precipitation when section 3 precipitation

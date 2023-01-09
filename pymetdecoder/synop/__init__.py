@@ -285,7 +285,7 @@ class SYNOP(pymetdecoder.Report):
                 next_group = next(groups)
                 last_header = None
                 while True:
-                    if re.match("^(555)$", next_group):
+                    if re.match("^(444)$", next_group) or re.match("^(555)$", next_group):
                         break
                     try:
                         header = int(next_group[0])
@@ -798,6 +798,10 @@ class SYNOP(pymetdecoder.Report):
         if len(s3_groups) > 0:
             groups.extend(["333"] + s3_groups)
 
+        ### SECTION 4
+        if "section4" in data:
+            groups.extend(["444"] + data["section4"])
+            
         ### SECTION 5
         if "section5" in data:
             groups.extend(["555"] + data["section5"])
