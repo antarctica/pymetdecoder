@@ -778,7 +778,8 @@ class SYNOP(pymetdecoder.Report):
         if "optical_phenomena" in data:
             s3_groups.append(obs.OpticalPhenomena().encode(data["optical_phenomena"], group="990"))
         if "mirage" in data:
-            s3_groups.append(obs.Mirage().encode(data["mirage"], group="991"))
+            for m in data["mirage"]:
+                s3_groups.append(obs.Mirage().encode(m, group="991"))
         if "st_elmos_fire" in data:
             s3_groups.append("99190")
         if "condensation_trails" in data:
@@ -1044,7 +1045,9 @@ class SYNOP(pymetdecoder.Report):
                     if g[3:5] == "90":
                         data["st_elmos_fire"] = True
                     else:
-                        data["mirage"] = obs.Mirage().decode(g)
+                        if "mirage" not in data:
+                            data["mirage"] = []
+                        data["mirage"].append(obs.Mirage().decode(g))
                 elif j[2] == "2":
                     data["condensation_trails"] = obs.CondensationTrails().decode(g)
                 elif j[2] == "3":
