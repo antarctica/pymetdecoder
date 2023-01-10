@@ -16,6 +16,7 @@
 * Multiple mirages can now be decoded and encoded (SYNOP section 3, 991xx)
 * Latitude and longitude in `station_position` now returned as floats instead of strings
 * `quadrant` checked for validity
+* Instrumental `wind_waves` are now decoded from SYNOP section 3 group 1 and group 7 correctly
 
 ## 0.1.1 [2021-07-19]
 

@@ -175,16 +175,12 @@ class TestSynopBBXX(BaseTestSynop):
         },
         "wind_waves": [{
             "period": { "value": 8,   "unit": "s" },
-            "height": { "value": 2.0, "unit": "m" },
-            "instrumental": True, "accurate": False, "confused": False
+            "height": { "value": 2.1, "unit": "m" },
+            "instrumental": True, "accurate": True, "confused": False
         },{
             "period": { "value": 6,   "unit": "s" },
             "height": { "value": 2.0, "unit": "m" },
             "instrumental": False, "accurate": False, "confused": False
-        },{
-            "period": None,
-            "height": { "value": 2.1, "unit": "m" },
-            "instrumental": True, "accurate": True, "confused": False
         }],
         "swell_waves": [{
             "direction": { "_table": "0877", "value": 100, "varAllUnknown": False, "calm": False, "_code": 10, "unit": "deg" },

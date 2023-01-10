@@ -245,11 +245,11 @@ class SYNOP(pymetdecoder.Report):
                         elif i == 1: # Period and height of waves (instrumental)
                             if "wind_waves" not in data:
                                 data["wind_waves"] = []
-                            data["wind_waves"].append(obs.WindWaves().decode(next_group, instrumental=True))
+                            data["wind_waves"].append(obs.WindWaves().decode(next_group, instrumental=True, waves=data["wind_waves"]))
                         elif i == 2: # Period and height of wind waves
                             if "wind_waves" not in data:
                                 data["wind_waves"] = []
-                            data["wind_waves"].append(obs.WindWaves().decode(next_group, instrumental=False))
+                            data["wind_waves"].append(obs.WindWaves().decode(next_group, instrumental=False, waves=data["wind_waves"]))
                         elif i == 3: # Swell wave directions
                             sw_dirs = next_group
                         elif i == 4 or i == 5:
@@ -263,7 +263,27 @@ class SYNOP(pymetdecoder.Report):
                         elif i == 7: # Accurate wave height
                             if "wind_waves" not in data:
                                 data["wind_waves"] = []
-                            data["wind_waves"].append(obs.WindWaves().decode(next_group, instrumental=True))
+
+                            # First, find the existing instrumental wave measurement (from group 1)
+                            # We need this, otherwise this group is superfluous
+                            instrumental = None
+                            for w in data["wind_waves"]:
+                                if w["instrumental"]:
+                                    instrumental = w
+                                    break
+                            if instrumental is None:
+                                logging.warning("1pphh group required if 70hhh group is specified")
+                                continue
+
+                            # Next, check the inaccurate (group 1) height is similar to the accurate
+                            # measurement in this group. If not, warn
+                            this_wave = obs.WindWaves().decode(next_group, instrumental=False, waves=data["wind_waves"])
+                            if not (instrumental["height"]["value"] - 0.5 <= this_wave["height"]["value"] <= instrumental["height"]["value"] + 0.5):
+                                logging.warning("Differing heights for wind wave between group 1 and group 7")
+
+                            # Update the instrumental wave height with the accurate version
+                            instrumental["height"] = this_wave["height"]
+                            instrumental["accurate"] = True
                         elif i == 8:
                             data["wet_bulb_temperature"] = obs.WetBulbTemperature().decode(next_group)
                         next_group = next(groups)
