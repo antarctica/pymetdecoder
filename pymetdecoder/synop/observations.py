@@ -573,9 +573,9 @@ class ImportantWeather(Observation):
     def _decode(self, raw, **kwargs):
         use_4687 = kwargs.get("use_4687", False)
         if use_4687:
-            self._CODE_TABLE = ct.CodeTable4687
+            return ct.CodeTable4687().decode(raw, **kwargs)
         else:
-            return { "value": int(raw), "_table": "4677" }
+            return { "value": int(raw), "_table": "4677", "time_before_obs": kwargs.get("time_before") }
 class LocalPrecipitation(Observation):
     """
     Precipitation character and time of precipitation for Region I

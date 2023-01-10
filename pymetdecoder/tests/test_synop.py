@@ -683,8 +683,8 @@ class TestSynopAAXX9Groups96(BaseTestSynop):
             "_table": "4677", "value": 20, "time_before_obs": { "value": 3, "unit": "h" }
         }],
         "important_weather": [
-            { "_table": "4677", "value": 47 },
-            { "_table": "4687", "value": 10 }
+            { "_table": "4677", "value": 47, "time_before_obs": { "value": 3, "unit": "h" }},
+            { "_table": "4687", "value": 10, "time_before_obs": { "value": 3, "unit": "h" }}
         ]
     }
 class TestSynopAAXX9Groups98(BaseTestSynop):
