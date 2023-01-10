@@ -5,9 +5,11 @@
 ### Added
 
 * Added unit tests!
+* (#3, #7) - Decoding/encoding of SYNOP section 4 is now implemented
 
 ### Fixed
 
+* (#4, #5) - Better handling of sunshine and radiation groups in SYNOP section 3
 * (#6) - Better exception handling
 * `time_of_ending` in `weather_info` (SYNOP section 3, 901xx) now re-encodes correctly
 * SYNOP section 3, 965xx now decodes correctly
