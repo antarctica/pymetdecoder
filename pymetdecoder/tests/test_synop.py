@@ -135,7 +135,7 @@ class TestSynopBBXX(BaseTestSynop):
             "value": 1, "unit": "m/s", "estimated": False
         },
         "station_position": {
-            "latitude": "17.0", "longitude": "-157.7"
+            "latitude": 17.0, "longitude": -157.7
         },
         "region": {
             "value": { "_table": "0161", "value": "V" }
@@ -228,8 +228,8 @@ class TestSynopOOXX(BaseTestSynop):
             "value": 4, "unit": "KT", "estimated": False
         },
         "station_position": {
-            "latitude": "-75.9",
-            "longitude": "-87.4",
+            "latitude": -75.9,
+            "longitude": -87.4,
             "marsden_square": 560,
             "elevation": {
                 "value": 1250,
@@ -759,7 +759,7 @@ class TestSynopBBXXAlternative(BaseTestSynop):
             "value": 4, "unit": "KT", "estimated": False
         },
         "station_position": {
-            "latitude": "-60.7", "longitude": "-45.5"
+            "latitude": -60.7, "longitude": -45.5
         },
         "region": {
             "value": "SHIP"

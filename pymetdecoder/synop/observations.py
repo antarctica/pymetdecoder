@@ -1127,6 +1127,8 @@ class StationPosition(Observation):
         lat = raw[2:5]  # Latitude
         Q   = raw[6:7]  # Quadrant
         lon = raw[7:11] # Longitude
+        if Q not in ["1", "3", "5", "7"]:
+            raise InvalidCode(Q, "quadrant")
 
         # Check both values are numeric, otherwise we can't get the position
         try:
@@ -1213,14 +1215,14 @@ class StationPosition(Observation):
     class Latitude(Observation):
         def _decode(self, raw, **kwargs):
             quadrant = kwargs.get("quadrant")
-            return "{:.1f}".format(int(raw) / (-10.0 if quadrant in ["3", "5"] else 10.0))
+            return float("{:.1f}".format(int(raw) / (-10.0 if quadrant in ["3", "5"] else 10.0)))
         def _encode(self, data, **kwargs):
             quadrant = kwargs.get("quadrant")
             return int(float(data) * (-10.0 if quadrant in ["3", "5"] else 10.0))
     class Longitude(Observation):
         def _decode(self, raw, **kwargs):
             quadrant = kwargs.get("quadrant")
-            return "{:.1f}".format(int(raw) / (-10.0 if quadrant in ["5", "7"] else 10.0))
+            return float("{:.1f}".format(int(raw) / (-10.0 if quadrant in ["5", "7"] else 10.0)))
         def _encode(self, data, **kwargs):
             quadrant = kwargs.get("quadrant")
             return int(float(data) * (-10.0 if quadrant in ["5", "7"] else 10.0))

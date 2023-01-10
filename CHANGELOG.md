@@ -14,6 +14,8 @@
 * `time_of_ending` in `weather_info` (SYNOP section 3, 901xx) now re-encodes correctly
 * SYNOP section 3, 965xx now decodes correctly
 * Multiple mirages can now be decoded and encoded (SYNOP section 3, 991xx)
+* Latitude and longitude in `station_position` now returned as floats instead of strings
+* `quadrant` checked for validity
 
 ## 0.1.1 [2021-07-19]
 
