@@ -644,7 +644,7 @@ class MountainCondition(Observation):
         _CODE_TABLE = ct.CodeTable2863
         _CODE_LEN = 1
     _COMPONENTS = [
-        ("conditions", 3, 1, Condition),
+        ("condition", 3, 1, Condition),
         ("evolution", 4, 1, Evolution)
     ]
 class ObservationTime(Observation):

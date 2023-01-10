@@ -44,22 +44,7 @@ class BaseTestSynopRadiationPrecip(BaseTestSynop):
     Tests we get correct radiation and precipitation. We need to test multiple
     combinations due to the complexity
     """
-    # SYNOP = "AAXX 01004 89022 22782 61506 30111 333 55055 01234 10239 60123"
     TEST_ATTRS = ["sunshine", "radiation", "precipitation_s3"]
-    # expected = {
-    #     "precipitation_s3": {
-    #         "amount": { "_table": "3590", "value": 12, "quantifier": None, "trace": False, "_code": 12, "unit": "mm" },
-    #         "time_before_obs": { "_table": "4019", "value": 18, "unit": "h", "_code": 3 }
-    #     },
-    #     "radiation": {
-    #         "positive_net": [
-    #             { "value": 1234, "unit": "J/cm2", "time_before_obs": { "value": 24, "unit": "h" }}
-    #         ],
-    #         "negative_net": [
-    #             { "value": 239, "unit": "J/cm2", "time_before_obs": { "value": 24, "unit": "h" }}
-    #         ]
-    #     }
-    # }
 
 class TestSynopAAXX(BaseTestSynop):
     """
@@ -562,6 +547,197 @@ class TestSynopAAXXNoSunshine(BaseTestSynopRadiationPrecip):
             "amount": { "_table": "3590", "value": 19, "quantifier": None, "trace": False, "_code": 19, "unit": "mm" },
             "time_before_obs": { "_table": "4019", "value": 12, "unit": "h", "_code": 2 }
         }
+    }
+class TestSynopAAXX9Groups90(BaseTestSynop):
+    """
+    Tests SYNOP with various 9-groups in section 3 (900-909 - time and variability)
+    """
+    SYNOP = "AAXX 10034 89004 46/// /1312 11202 21292 38818 49879 51005 333 11155 21214 90047 90083 90101 90521 90973"
+    TEST_ATTRS = ["weather_info", "precipitation_end"]
+    expected = {
+        "weather_info": {
+            "time_before_obs": { "_table": "4077", "value": 282, "unit": "min", "_code": 47 },
+            "variability": { "_table": "4077", "value": 83, "_code": 83 },
+            "time_of_ending": { "_table": "4077", "value": 6, "unit": "min", "_code": 1 },
+            "non_persistent": { "_table": "4077", "value": 126, "unit": "min", "_code": 21 },
+        },
+        "precipitation_end": {
+            "time": { "_table": "3552", "min": 6, "max": 12, "quantifier": None, "unknown": False, "unit": "h", "_code": 7 },
+            "character": { "_table": "0833", "min": 6, "max": None, "quantifier": "isGreater", "unknown": False, "unit": "h", "_code": 3 }
+        }
+    }
+class TestSynopAAXX9Groups91(BaseTestSynop):
+    """
+    Tests SYNOP with various 9-groups in section 3 (910-919 - wind and squall)
+    """
+    SYNOP = "AAXX 10034 89004 46/// /1312 11202 21292 38818 49879 51005 333 11155 21214 91015 91103 91523"
+    TEST_ATTRS = ["highest_gust"]
+    expected = {
+        "highest_gust": [{
+            "speed": { "value": 15, "unit": "KT" },
+            "direction": None,
+            "measure_period": { "value": 10, "unit": "min" }
+        },{
+            "speed": { "value": 3, "unit": "KT" },
+            "direction": { "_table": "0877", "value": 230, "varAllUnknown": False, "calm": False, "_code": 23, "unit": "deg" },
+            "time_before_obs": { "value": 3, "unit": "h" }
+        }]
+    }
+class TestSynopAAXX9Groups92(BaseTestSynop):
+    """
+    Tests SYNOP with various 9-groups in section 3 (920-929 - state of the sea, icing phenomena and snow cover)
+    """
+    SYNOP = "AAXX 10034 89004 46/// /1312 11202 21292 38818 49879 51005 333 92416 92734 92882 92921"
+    TEST_ATTRS = ["sea_state", "sea_visibility", "frozen_deposit", "snow_cover_regularity", "drift_snow"]
+    expected = {
+        "sea_state": {
+            "_table": "3700", "value": "Calm (rippled)", "_code": 1
+        },
+        "sea_visibility": {
+            "_table": "4300", "min": 4000, "max": 10000, "quantifier": None, "_code": 6, "unit": "m"
+        },
+        "frozen_deposit": {
+            "deposit": { "_table": "3764", "value": "Snow deposit", "_code": 3 },
+            "variation": { "_table": "3955", "value": 4 }
+        },
+        "snow_cover_regularity": {
+            "cover": { "_table": "3765", "value": "Moist snow, with surface crust", "_code": 8 },
+            "regularity": { "_table": "3775", "value": "Even snow cover, state of ground unknown, no drifts", "_code": 2 }
+        },
+        "drift_snow": {
+            "phenomena": { "_table": "3766", "value": 2 },
+            "evolution": { "_table": "3776", "value": 1 }
+        }
+    }
+class TestSynopAAXX9Groups93(BaseTestSynop):
+    """
+    Tests SYNOP with various 9-groups in section 3 (930-939 - amount of precipitation or deposit)
+    """
+    SYNOP = "AAXX 10034 89004 46/// /1312 11202 21292 38818 49879 51005 333 93105 93349 93402 93509 93610 93704"
+    TEST_ATTRS = ["snow_fall", "deposit_diameter"]
+    expected = {
+        "snow_fall": {
+            "amount": { "_table": "3870", "value": 50, "quantifier": None, "inaccurate": False, "_code": 5, "unit": "mm" },
+            "time_before_obs": { "value": 3, "unit": "h" }
+        },
+        "deposit_diameter": [{
+            "solid": { "_table": "3570", "value": 49, "non_measurable": False, "quantifier": None, "impossible": False, "_code": 49, "unit": "mm" }
+        },{
+            "glaze": { "_table": "3570", "value": 2, "non_measurable": False, "quantifier": None, "impossible": False, "_code": 2, "unit": "mm" }
+        },{
+            "rime": { "_table": "3570", "value": 9, "non_measurable": False, "quantifier": None, "impossible": False, "_code": 9, "unit": "mm" }
+        },{
+            "compound": { "_table": "3570", "value": 10, "non_measurable": False, "quantifier": None, "impossible": False, "_code": 10, "unit": "mm" }
+        },{
+            "wet_snow": { "_table": "3570", "value": 4, "non_measurable": False, "quantifier": None, "impossible": False, "_code": 4, "unit": "mm" }
+        }]
+    }
+class TestSynopAAXX9Groups94(BaseTestSynop):
+    """
+    Tests SYNOP with various 9-groups in section 3 (940-949 - amount of precipitation or deposit)
+    """
+    SYNOP = "AAXX 10034 89004 46/// /1312 11202 21292 38818 49879 51005 333 94060 94072 94469 94478"
+    TEST_ATTRS = ["cloud_evolution", "max_low_cloud_concentration"]
+    expected = {
+        "cloud_evolution": [{
+            "genus": { "_table": "0500", "value": "Sc", "_code": 6 },
+            "evolution": { "_table": "2863", "value": "No change", "_code": 0 }
+        },{
+            "genus": { "_table": "0500", "value": "St", "_code": 7 },
+            "evolution": { "_table": "2863", "value": "Slow elevation", "_code": 2 }
+        }],
+        "max_low_cloud_concentration": [{
+            "cloud_type": { "_table": "0513", "value": 6 },
+            "direction": { "_table": "0700", "value": None, "isCalmOrStationary": False, "allDirections": True, "_code": 9 }
+        },{
+            "cloud_type": { "_table": "0513", "value": 7 },
+            "direction": { "_table": "0700", "value": "N", "isCalmOrStationary": False, "allDirections": False, "_code": 8 }
+        }]
+    }
+class TestSynopAAXX9Groups95(BaseTestSynop):
+    """
+    Tests SYNOP with various 9-groups in section 3 (950-959 - cloud conditions over mountains and passes)
+    """
+    SYNOP = "AAXX 10034 89004 46/// /1312 11202 21292 38818 49879 51005 333 95095 95150"
+    TEST_ATTRS = ["mountain_condition", "valley_clouds"]
+    expected = {
+        "mountain_condition": {
+            "condition": { "_table": "2745", "value": 9 },
+            "evolution": { "_table": "2863", "value": "Slow lowering", "_code": 5 }
+        },
+        "valley_clouds": {
+            "condition": { "_table": "2754", "value": "Some isolated clouds", "_code": 5  },
+            "evolution": { "_table": "2864", "value": "No change", "_code": 0 }
+        }
+    }
+class TestSynopAAXX9Groups96(BaseTestSynop):
+    """
+    Tests SYNOP with various 9-groups in section 3 (960-969 - present weather and past weather)
+    """
+    SYNOP = "AAXX 10034 89004 46/// /1312 11202 21292 38818 49879 51005 333 96010 96120 96447 96510"
+    TEST_ATTRS = ["present_weather_additional", "important_weather"]
+    expected = {
+        "present_weather_additional": [{
+            "_table": "4677", "value": 10, "time_before_obs": { "value": 3, "unit": "h" }
+        },{
+            "_table": "4677", "value": 20, "time_before_obs": { "value": 3, "unit": "h" }
+        }],
+        "important_weather": [
+            { "_table": "4677", "value": 47 },
+            { "_table": "4687", "value": 10 }
+        ]
+    }
+class TestSynopAAXX9Groups98(BaseTestSynop):
+    """
+    Tests SYNOP with various 9-groups in section 3 (980-989 - visibility)
+    """
+    SYNOP = "AAXX 10034 89004 46/// /1312 11202 21292 38818 49879 51005 71322 333 98362 98732"
+    TEST_ATTRS = ["visibility_direction"]
+    expected = {
+        "visibility_direction": [{
+            "direction": { "value": "SE" },
+            "visibility": { "_table": "4377", "value": 12000, "quantifier": None, "use90": False, "_code": 62, "unit": "m" }
+        },{
+            "direction": { "value": "NW" },
+            "visibility": { "_table": "4377", "value": 3200, "quantifier": None, "use90": False, "_code": 32, "unit": "m" }
+        }]
+    }
+class TestSynopAAXX9Groups99(BaseTestSynop):
+    """
+    Tests SYNOP with various 9-groups in section 3 (990-999 - optical phenomena and miscellaneous)
+    """
+    SYNOP = "AAXX 10034 89004 46/// /1312 11202 21292 38818 49879 51005 71322 333 99050 99114 99115 99190 99273 99349 99429 99605 99918"
+    TEST_ATTRS = [
+        "optical_phenomena", "mirage", "st_elmos_fire", "condensation_trails", "special_clouds",
+        "day_darkness", "sudden_temperature_change", "sudden_humidity_change"
+    ]
+    expected = {
+        "optical_phenomena": {
+            "phenomena": { "_table": "5161", "value": "Corona", "_code": 5 },
+            "intensity": { "_table": "1861", "value": "Slight", "_code": 0 }
+        },
+        "mirage": [{
+            "mirage_type": { "_table": "0101", "value": 1 },
+            "direction": { "_table": "0700", "value": "S", "isCalmOrStationary": False, "allDirections": False, "_code": 4 }
+        },{
+            "mirage_type": { "_table": "0101", "value": 1 },
+            "direction": { "_table": "0700", "value": "SW", "isCalmOrStationary": False, "allDirections": False, "_code": 5 }
+        }],
+        "st_elmos_fire": True,
+        "condensation_trails": {
+            "trail": { "_table": "2752", "value": "Persistent, covering 1/8 of the sky", "_code": 7 },
+            "time":  { "_table": "4055", "min": 90, "max": 120, "unit": "min", "_code": 3 }
+        },
+        "special_clouds": {
+            "cloud_type": { "_table": "0521", "value": "Clouds from fires", "_code": 4 },
+            "direction":  { "_table": "0700", "value": None, "isCalmOrStationary": False, "allDirections": True, "_code": 9 }
+        },
+        "day_darkness": {
+            "darkness":  { "_table": "0163", "value": "black", "_code": 2 },
+            "direction": { "_table": "0700", "value": None, "isCalmOrStationary": False, "allDirections": True, "_code": 9 }
+        },
+        "sudden_temperature_change": { "value": 5, "unit": "Cel" },
+        "sudden_humidity_change":    { "value": -18, "unit": "%" }
     }
 class TestSynopBBXXAlternative(BaseTestSynop):
     """
