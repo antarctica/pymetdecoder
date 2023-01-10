@@ -701,6 +701,8 @@ class SYNOP(pymetdecoder.Report):
                 s3_groups.append(obs.TimeBeforeObs().encode(data["weather_info"]["time_before_obs"], group="900"))
             if "variability" in data["weather_info"]:
                 s3_groups.append(obs.VariableLocationIntensity().encode(data["weather_info"]["variability"], group="900"))
+            if "time_of_ending" in data["weather_info"]:
+                s3_groups.append(obs.TimeOfEnding().encode(data["weather_info"]["time_of_ending"], group="901"))
             if "non_persistent" in data["weather_info"]:
                 s3_groups.append(obs.TimeBeforeObs().encode(data["weather_info"]["non_persistent"], group="905"))
         if "precipitation_begin" in data:
