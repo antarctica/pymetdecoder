@@ -10,6 +10,7 @@
 ################################################################################
 import pytest
 from pymetdecoder import synop as s
+from pymetdecoder import DecodeError, EncodeError
 ################################################################################
 # CLASSES
 ################################################################################
@@ -827,3 +828,16 @@ class TestSynopBBXXAlternative(BaseTestSynop):
             "text": "icy conditions"
         }
     }
+class TestSynopException:
+    """
+    Tests the various exceptions
+    """
+    SYNOP = "AAXX 27108 83/// /3502 11022 21042 39841 40025 52047"
+    data  = {}
+    def test_decode_exception(self):
+        with pytest.raises(DecodeError):
+            synop = s.SYNOP()
+            data  = synop.decode(self.SYNOP)
+    def test_encode_exception(self):
+        with pytest.raises(EncodeError):
+            encoded = s.SYNOP().encode(self.data)

@@ -67,7 +67,7 @@ class Report(object):
         try:
             return self._encode(data)
         except Exception as e:
-            raise DecodeError(str(e))
+            raise EncodeError(str(e))
         # raise NotImplementedError("encode is not implemented for {}".format(type(self).__name__))
     def _decode(self, message):
         """
@@ -118,9 +118,10 @@ class Observation(object):
             logging.error(str(e))
             sys.exit(1)
         except InvalidCode as e:
-            logging.warning(str(e))
+            # logging.warning(str(e))
+            raise DecodeError(str(e))
         except Exception as e:
-            logging.warning(str(e))
+            # logging.warning(str(e))
             raise DecodeError("Unable to decode group {}".format(raw))
     def encode(self, raw, **kwargs):
         """
