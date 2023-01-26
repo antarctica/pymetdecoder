@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## 0.1.2 [XXXX-XX-XX]
+## 0.1.2 [2023-01-25]
 
 ### Added
 
