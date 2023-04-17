@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## 0.1.3 [2023-04-17]
+
+### Fixed
+
+* (#8) - Removed logging configuration from `__init__.py`
+
 ## 0.1.2 [2023-01-25]
 
 ### Added
