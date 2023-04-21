@@ -5,6 +5,7 @@
 ### Fixed
 
 * (#9) - Rainfall group in section 3 is now properly decoded when cloud group is present
+* (#10) - Fixed erroneous error message for temperatures
 
 ## 0.1.3 [2023-04-17]
 
