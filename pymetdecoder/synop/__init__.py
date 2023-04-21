@@ -486,7 +486,7 @@ class SYNOP(pymetdecoder.Report):
                             data["radiation"][radiation_type] = []
                         data["radiation"][radiation_type].append(radiation)
                 if len(msg_5) > 0 and msg_5[-1].startswith("6") and data["precipitation_indicator"]["in_group_3"]:
-                    data["precipitation_s3"] = obs.Precipitation().decode(next_group, tenths=False)
+                    data["precipitation_s3"] = obs.Precipitation().decode(msg_5[-1], tenths=False)
                     if "short_wave" in data["radiation"]:
                         if len(data["radiation"]["short_wave"]) == 1:
                             del(data["radiation"]["short_wave"])

@@ -545,6 +545,23 @@ class TestSynopAAXXNoSunshine(BaseTestSynopRadiationPrecip):
             "time_before_obs": { "_table": "4019", "value": 12, "unit": "h", "_code": 2 }
         }
     }
+class TestSynopAAXXExtraGroupAfterRainfall(BaseTestSynop):
+    """
+    Tests SYNOP with extra groups after section 3 rainfall (as mentioned in issue #9)
+    """
+    SYNOP = "AAXX 24121 80110 01565 79901 10173 20173 38512 60004 7052/ 81550 333 20167 30/// 55066 56990 59006 60007 81630"
+    TEST_ATTRS = ["precipitation_s3", "cloud_layer"]
+    expected = {
+        "precipitation_s3": {
+            "amount": { "_table": "3590", "value": 0, "quantifier": None, "trace": False, "_code": 0, "unit": "mm"},
+            "time_before_obs": { "_table": "4019", "value": 3, "unit": "h", "_code": 7 }
+        },
+        "cloud_layer": [{
+            "cloud_cover":  { "_table": "2700", "value": 1, "obscured": False, "unit": "okta", "_code": 1 },
+            "cloud_genus":  { "_table": "0500", "value": "Sc", "_code": 6 },
+            "cloud_height": { "_table": "1677", "value": 900, "quantifier": None, "_code": 30, "unit": "m" }
+        }]
+    }
 class TestSynopAAXX9Groups90(BaseTestSynop):
     """
     Tests SYNOP with various 9-groups in section 3 (900-909 - time and variability)
