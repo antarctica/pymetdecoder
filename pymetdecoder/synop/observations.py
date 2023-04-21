@@ -7,6 +7,8 @@
 #   * First version
 # TDBA 2020-11-12:
 #   * Merged from individual section scripts
+# TDBA 2023-04-21:
+#   * Fixed erroneous error message for temperatures (#10)
 ################################################################################
 # CONFIGURATION
 ################################################################################
@@ -1446,8 +1448,10 @@ class Temperature(Observation):
         sn  = group[1:2]
         TTT = group[2:5]
 
-        # The last character can sometimes be a "/" instead of a 0, so fix
-        TTT = re.sub("\/$", "0", TTT)
+        # The last character can sometimes be a "/" instead of a 0, so fix.
+        # But, only do this if the whole thing isn't /// (see issue #10)
+        if TTT != "///":
+            TTT = re.sub("\/$", "0", TTT)
 
         # If sign is not 0 or 1, return None with log message
         if sn not in ["0", "1", "/"]:

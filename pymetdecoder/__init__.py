@@ -7,6 +7,9 @@
 #   * First version
 # TDBA 2023-04-14:
 #   * Removed logging configuration (#8)
+# TDBA 2023-04-21:
+#   * Rainfall group in section 3 now decodes properly if cloud group (or other
+#     group) follows (#9)
 ################################################################################
 # IMPORTS
 ################################################################################
