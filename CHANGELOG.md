@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## 0.1.4
+
+### Fixed
+
+* (#9) - Rainfall group in section 3 is now properly decoded when cloud group is present
+
 ## 0.1.3 [2023-04-17]
 
 ### Fixed
