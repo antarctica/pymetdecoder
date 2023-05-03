@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## Next [XXXX-XX-XX]
+
+### Fixed
+
+* (#11) - 0xxxx group handling in section 3 now extended to other regions
+
 ## 0.1.4 [2023-04-21]
 
 ### Fixed

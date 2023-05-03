@@ -331,6 +331,11 @@ class SYNOP(pymetdecoder.Report):
                             elif data["region"]["value"] == "I":
                                 data["ground_minimum_temperature"] = obs.GroundMinimumTemperature().decode(next_group[1:3])
                                 data["local_precipitation"] = obs.LocalPrecipitation().decode(next_group[3:5])
+                            elif data["region"]["value"] == "II":
+                                data["ground_state_grass"] = obs.GroundState().decode(next_group)
+                            elif data["region"]["value"] == "IV":
+                                data["tropical_sky_state"] = obs.TropicalSkyState().decode(next_group[1:2])
+                                data["tropical_cloud_drift_direction"] = obs.CloudDriftDirection().decode(next_group)
                             else:
                                 raise NotImplementedError("0xxxx is not valid for region {}".format(data["region"]["value"]))
                         elif header == 1:
@@ -655,6 +660,21 @@ class SYNOP(pymetdecoder.Report):
                 ))
             else:
                 raise pymetdecoder.EncodeError("ground_minimum_temperature and local_precipitation not valid for region {}".format(data["region"]["value"]))
+        if "ground_state_grass" in data:
+            if data["region"]["value"] == "II":
+                s3_groups.append("0{}".format(
+                    obs.GroundState().encode(data["ground_state_grass"])
+                ))
+            else:
+                raise pymetdecoder.EncodeError("ground_state_grass not valid for region {}".format(data["region"]["value"]))
+        if "tropical_sky_state" in data or "tropical_cloud_drift_direction" in data:
+            if data["region"]["value"] == "IV":
+                s3_groups.append("0{}{}".format(
+                    obs.TropicalSkyState().encode(data["tropical_sky_state"]),
+                    obs.CloudDriftDirection().encode(data["tropical_cloud_drift_direction"])
+                ))
+            else:
+                raise pymetdecoder.EncodeError("tropical_sky_state and tropical_cloud_drift_direction not valid for region {}".format(data["region"]["value"]))
         if "maximum_temperature" in data:
             s3_groups.append(obs.Temperature().encode(data["maximum_temperature"], group="1"))
         if "minimum_temperature" in data:

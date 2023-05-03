@@ -1299,41 +1299,6 @@ class SuddenTemperatureChange(Observation):
         return val
     def _encode_convert(self, data, **kwargs):
         return abs(data)
-class SurfaceWind(Observation):
-    """
-    Surface wind
-    """
-    _CODE_LEN = 4
-    def _decode(self, ddff):
-        # Get direction and speed
-        dd = ddff[0:2]
-        ff = ddff[2:4]
-
-        # Get direction and speed
-        direction = DirectionDegrees().decode(dd)
-        speed = self.Speed().decode(ff)
-
-        # Perform sanity check - if the wind is calm, it can't have a speed
-        if direction is not None and direction["calm"] and speed is not None and speed["value"] > 0:
-            logging.warning("Wind is calm, yet has a speed (dd: {}, ff: {})".format(dd, ff))
-            speed = None
-
-        return {
-            "direction": direction,
-            "speed": speed
-        }
-    def _encode(self, data, **kwargs):
-        return "{dd}{ff}".format(
-            dd = DirectionDegrees().encode(data["direction"] if "direction" in data else None, allow_none=True),
-            ff = self.Speed().encode(data["speed"] if "speed" in data else None)
-        )
-    class Speed(Observation):
-        _CODE_LEN = 2
-        def encode(self, data, **kwargs):
-            if data is not None and data["value"] > 99:
-                return "99 00{}".format(self._encode_value(data))
-            else:
-                return self._encode_value(data)
 class Sunshine(Observation):
     """
     Amount of sunshine
@@ -1382,6 +1347,41 @@ class Sunshine(Observation):
             return val / 10
         def _encode_convert(self, val):
             return int(val * 10)
+class SurfaceWind(Observation):
+    """
+    Surface wind
+    """
+    _CODE_LEN = 4
+    def _decode(self, ddff):
+        # Get direction and speed
+        dd = ddff[0:2]
+        ff = ddff[2:4]
+
+        # Get direction and speed
+        direction = DirectionDegrees().decode(dd)
+        speed = self.Speed().decode(ff)
+
+        # Perform sanity check - if the wind is calm, it can't have a speed
+        if direction is not None and direction["calm"] and speed is not None and speed["value"] > 0:
+            logging.warning("Wind is calm, yet has a speed (dd: {}, ff: {})".format(dd, ff))
+            speed = None
+
+        return {
+            "direction": direction,
+            "speed": speed
+        }
+    def _encode(self, data, **kwargs):
+        return "{dd}{ff}".format(
+            dd = DirectionDegrees().encode(data["direction"] if "direction" in data else None, allow_none=True),
+            ff = self.Speed().encode(data["speed"] if "speed" in data else None)
+        )
+    class Speed(Observation):
+        _CODE_LEN = 2
+        def encode(self, data, **kwargs):
+            if data is not None and data["value"] > 99:
+                return "99 00{}".format(self._encode_value(data))
+            else:
+                return self._encode_value(data)
 class SwellWaves(Observation):
     """
     Swell waves
@@ -1493,6 +1493,8 @@ class TimeOfEnding(Observation):
     """
     _CODE_LEN = 2
     _CODE_TABLE = ct.CodeTable4077T
+class TropicalSkyState(SimpleCodeTable):
+    _TABLE = "430"
 class VariableLocationIntensity(Observation):
     """
     Variability, location or intensity

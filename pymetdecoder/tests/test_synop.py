@@ -753,6 +753,57 @@ class TestSynopAAXX9Groups99(BaseTestSynop):
         "sudden_temperature_change": { "value": 5, "unit": "Cel" },
         "sudden_humidity_change":    { "value": -18, "unit": "%" }
     }
+class TestSynopAAXXRegion1Section3Group0(BaseTestSynop):
+    """
+    Tests SYNOP from Region I with section 3 group 0
+    """
+    SYNOP = "AAXX 25064 67243 11465 50604 333 01223"
+    TEST_ATTRS = ["ground_minimum_temperature", "local_precipitation"]
+    expected = {
+        "ground_minimum_temperature": { "value": 12, "unit": "Cel" },
+        "local_precipitation": {
+            "character": { "_table": "167", "value": "Moderate intermittent", "_code": 2 },
+            "time":      { "_table": "168", "min": 2, "max": 3, "unit": "h", "quantifier": None, "_code": 3 }
+        }
+    }
+class TestSynopAAXXRegion2Section3Group0(BaseTestSynop):
+    """
+    Tests SYNOP from Region II with section 3 group 0
+    """
+    SYNOP = "AAXX 25064 21998 11465 50604 333 00017"
+    TEST_ATTRS = ["ground_state_grass"]
+    expected = {
+        "ground_state_grass": {
+            "state":       { "_table": "0901", "value": 0 },
+            "temperature": { "value": 17, "unit": "Cel" }
+        }
+    }
+class TestSynopAAXXRegion4Section3Group0(BaseTestSynop):
+    """
+    Tests SYNOP from Region IV with section 3 group 0
+    """
+    SYNOP = "AAXX 25064 78962 11465 50604 333 00275"
+    TEST_ATTRS = ["tropical_sky_state", "tropical_cloud_drift_direction"]
+    expected = {
+        "tropical_sky_state": { "_table": "430", "value": 0 },
+        "tropical_cloud_drift_direction": {
+            "low":    { "_table": "0700", "value": "E",  "isCalmOrStationary": False, "allDirections": False, "_code": 2 },
+            "middle": { "_table": "0700", "value": "NW", "isCalmOrStationary": False, "allDirections": False, "_code": 7 },
+            "high":   { "_table": "0700", "value": "SW", "isCalmOrStationary": False, "allDirections": False, "_code": 5 },
+        }
+    }
+class TestSynopAAXXRegionAntarcticSection3Group0(BaseTestSynop):
+    """
+    Tests SYNOP from Antarctic region with section 3 group 0
+    """
+    SYNOP = "AAXX 25064 89022 11465 50604 333 02022"
+    TEST_ATTRS = ["max_wind"]
+    expected = {
+        "max_wind": {
+            "direction": { "_table": "0877", "value": 200, "varAllUnknown": False, "calm": False, "_code": 20, "unit": "deg" },
+            "speed":     { "value": 22, "unit": "KT" }
+        }
+    }
 class TestSynopBBXXAlternative(BaseTestSynop):
     """
     Tests a BBXX synop with alternative options:

@@ -1172,7 +1172,7 @@ class CodeTable168(CodeTable):
         R = int(R)
         (min, max, quantifier) = (None, None, None)
         if R == 0:
-            return None
+            return { "value": None }
         else:
             (min, max) = self._RANGE[R]
             if max is None:
