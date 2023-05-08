@@ -892,6 +892,59 @@ class TestSynopBBXXAlternative(BaseTestSynop):
             "text": "icy conditions"
         }
     }
+class TestSynopAAXXSection5AfterSection1(BaseTestSynop):
+    """
+    Tests that section 5 groups are added to the "section5" key even if it follows
+    directly after section 1
+    """
+    SYNOP = "AAXX 25064 04018 42589 43120 555 3//32 84619"
+    expected = {
+        'station_type': {'value': 'AAXX'},
+        'obs_time': {
+            'day': {'value': 25}, 'hour': {'value': 6}},
+            'wind_indicator': {'value': 4, 'unit': 'KT', 'estimated': False},
+            'station_id': {'value': '04018'},
+            'region': {'value': 'VI'},
+            'precipitation_indicator': {
+                'value': 4, 'in_group_1': False, 'in_group_3': False
+            },
+        'weather_indicator': {'value': 2, 'automatic': False},
+        'lowest_cloud_base': {
+            '_table': '1600',
+            'min': 600,
+            'max': 1000,
+            'quantifier': None,
+            '_code': 5,
+            'unit': 'm'
+        },
+        'visibility': {
+            '_table': '4377',
+            'value': 70000,
+            'quantifier': 'isGreater',
+            'use90': False,
+            '_code': 89,
+            'unit': 'm'
+        },
+        'cloud_cover': {
+            '_table': '2700',
+            'value': 4,
+            'obscured': False,
+            'unit': 'okta',
+            '_code': 4
+        },
+        'surface_wind': {
+            'direction': {
+                '_table': '0877',
+                'value': 310,
+                'varAllUnknown': False,
+                'calm': False,
+                '_code': 31,
+                'unit': 'deg'
+            },
+            'speed': {'value': 20, 'unit': 'KT'}
+        },
+        'section5': ['3//32', '84619']
+    }
 class TestSynopException:
     """
     Tests the various exceptions
