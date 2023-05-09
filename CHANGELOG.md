@@ -5,6 +5,7 @@
 ### Fixed
 
 * (#11) - 0xxxx group handling in section 3 now extended to other regions
+* Synops now jump to Section 5 even if it follows directly after Section 1 or 2
 
 ## 0.1.4 [2023-04-21]
 
