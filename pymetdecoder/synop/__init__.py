@@ -131,7 +131,7 @@ class SYNOP(pymetdecoder.Report):
             # Parse the next group, based on the group header
             for i in range(1, 10):
                 try:
-                    if not re.match("^(222|333)", next_group):
+                    if not re.match("^(222|333|444|555)", next_group):
                         header = int(next_group[0:1])
                     else:
                         header = None
@@ -226,7 +226,7 @@ class SYNOP(pymetdecoder.Report):
             if has_section_2:
                 for i in range(0, 9):
                     try:
-                        if not re.match("^(ICE|333)$", next_group):
+                        if not re.match("^(ICE|333|444|555)$", next_group):
                             header = int(next_group[0:1])
                         else:
                             header = None
