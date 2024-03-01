@@ -255,6 +255,45 @@ class TestSynopOOXX(BaseTestSynop):
             "minute": { "value":  0 }
         }
     }
+class TestSynopOOXXElevation(BaseTestSynop):
+    """
+    Tests a simple OOXX synop with elevation
+    """
+    SYNOP = "OOXX BHO 05194 99210 10799 10119 02524 26/// /3001"
+    expected = {
+        "station_type": { "value": "OOXX" },
+        "callsign": { "value": "BHO" },
+        "obs_time": {
+            "day":  { "value": 5 },
+            "hour": { "value": 19 }
+        },
+        "wind_indicator": {
+            "value": 4, "unit": "KT", "estimated": False
+        },
+        "station_position": {
+            "latitude": 21.0,
+            "longitude": 79.9,
+            "marsden_square": 101,
+            "elevation": {
+                "value": 252,
+                "unit": "m"
+            },
+            "confidence": "Poor"
+        },
+        "precipitation_indicator": {
+            "value": 2, "in_group_1": False, "in_group_3": True
+        },
+        "weather_indicator": {
+            "value": 6, "automatic": True
+        },
+        "lowest_cloud_base": None,
+        "visibility": None,
+        "cloud_cover": None,
+        "surface_wind": {
+            "direction": { "_table": "0877", "value": 300, "varAllUnknown": False, "calm": False, "_code": 30, "unit": "deg" },
+            "speed": { "value": 1, "unit": "KT" }
+        }
+    }
 class TestSynopAAXXAntarctic(BaseTestSynop):
     """
     Tests a AAXX synop with Antarctic specific options (plus some additional options

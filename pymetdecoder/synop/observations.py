@@ -1159,7 +1159,7 @@ class StationPosition(Observation):
 
             # Decode values
             data["marsden_square"] = self.MarsdenSquare().decode(MMM)
-            data["elevation"] = self.Elevation().decode(hhhh, unit="m" if int(im) < 4 else "ft")
+            data["elevation"] = self.Elevation().decode(hhhh, unit="m" if int(im) <= 4 else "ft")
             data["confidence"] = self.Confidence().decode(im)
 
         # Return data
@@ -1254,6 +1254,8 @@ class StationPosition(Observation):
         def _encode(self, data, **kwargs):
             elevation = kwargs.get("elevation")
             confidence = self._CONFIDENCE.index(data)
+            if confidence == 0:
+                confidence = 4
             if "unit" not in elevation:
                 raise EncodeError("No units specified for elevation")
             if elevation["unit"] not in ["m", "ft"]:
