@@ -185,8 +185,8 @@ class SYNOP(pymetdecoder.Report):
                         # If the weather indicator says we're not including a group 7 code, yet we find one
                         # something went wrong somewhere
                         try:
-                            if self.data["weatherIndicator"].value not in [1, 4, 7]:
-                                logging.warning("Group 7 codes found, despite reported as being omitted (ix = {})".format(self.data["weatherIndicator"].value))
+                            if data["weather_indicator"]["value"] not in [1, 4, 7]:
+                                logging.warning("Group 7 codes found, despite reported as being omitted (ix = {})".format(data["weather_indicator"]["value"]))
                         except AttributeError:
                             pass
 
@@ -195,10 +195,14 @@ class SYNOP(pymetdecoder.Report):
                             hour = data["obs_time"]["hour"]["value"]
                         except Exception:
                             hour = None
-                        data["present_weather"] = obs.Weather().decode(next_group[1:3], time_before=def_time_before, type="present")
+                        try:
+                            ix = data["weather_indicator"]["value"]
+                        except:
+                            ix = None
+                        data["present_weather"] = obs.Weather().decode(next_group[1:3], time_before=def_time_before, type="present", weather_indicator=ix)
                         data["past_weather"] = [
-                            obs.Weather().decode(next_group[3:4], type="past"),
-                            obs.Weather().decode(next_group[4:5], type="past")
+                            obs.Weather().decode(next_group[3:4], type="past", weather_indicator=ix),
+                            obs.Weather().decode(next_group[4:5], type="past", weather_indicator=ix)
                         ]
                     elif i == 8: # Cloud type and amount
                         data["cloud_types"] = obs.CloudType().decode(next_group)
@@ -1027,17 +1031,21 @@ class SYNOP(pymetdecoder.Report):
                 else:
                     self.handle_not_implemented(g)
             elif j[1] == "6":
+                try:
+                    ix = data["weather_indicator"]["value"]
+                except:
+                    ix = None
                 if j[2] in ["0", "1"]:
                     if "present_weather_additional" not in data:
                         data["present_weather_additional"] = []
-                    weather = obs.Weather().decode(g[3:5], time_before=def_time_before, type="present")
+                    weather = obs.Weather().decode(g[3:5], time_before=def_time_before, type="present", weather_indicator=ix)
                     data["present_weather_additional"].append(weather)
                 elif j[2] in ["4", "5"]:
                     if "important_weather" not in data:
                         data["important_weather"] = []
                     use_4687 = True if j[2] == "5" else False
                     data["important_weather"].append(
-                        obs.ImportantWeather().decode(g[3:5], time_before=def_time_before, use_4687=use_4687)
+                        obs.ImportantWeather().decode(g[3:5], time_before=def_time_before, use_4687=use_4687, weather_indicator=ix)
                     )
                 else:
                     self.handle_not_implemented(g)

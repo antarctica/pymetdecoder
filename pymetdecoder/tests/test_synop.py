@@ -731,12 +731,12 @@ class TestSynopAAXX9Groups96(BaseTestSynop):
     TEST_ATTRS = ["present_weather_additional", "important_weather"]
     expected = {
         "present_weather_additional": [{
-            "_table": "4677", "value": 10, "time_before_obs": { "value": 3, "unit": "h" }
+            "_table": "4680", "value": 10, "time_before_obs": { "value": 3, "unit": "h" }
         },{
-            "_table": "4677", "value": 20, "time_before_obs": { "value": 3, "unit": "h" }
+            "_table": "4680", "value": 20, "time_before_obs": { "value": 3, "unit": "h" }
         }],
         "important_weather": [
-            { "_table": "4677", "value": 47, "time_before_obs": { "value": 3, "unit": "h" }},
+            { "_table": "4680", "value": 47, "time_before_obs": { "value": 3, "unit": "h" }},
             { "_table": "4687", "value": 10, "time_before_obs": { "value": 3, "unit": "h" }}
         ]
     }
@@ -984,6 +984,47 @@ class TestSynopAAXXSection5AfterSection1(BaseTestSynop):
         },
         'section5': ['3//32', '84619']
     }
+class TestSynopAAXXWeatherCorrectTablesAuto(BaseTestSynop):
+    """
+    Tests that present and past weather are using the correct tables (automatic)
+    """
+    SYNOP = "AAXX 21121 15001 07415 32931 10103 21090 39765 42250 57020 60071 72006"
+    TEST_ATTRS = ["present_weather", "past_weather"]
+    expected = {
+        "present_weather": {
+            "value": 20,
+            "_table": "4680",
+            "time_before_obs": {
+                "value": 6,
+                "unit": "h"
+            }
+        },
+        "past_weather": [
+            { "value": 0, "_table": "4531" },
+            { "value": 6, "_table": "4531" }
+        ]
+    }
+class TestSynopAAXXWeatherCorrectTablesManual(BaseTestSynop):
+    """
+    Tests that present and past weather are using the correct tables (manual)
+    """
+    SYNOP = "AAXX 21121 15001 01415 32931 10103 21090 39765 42250 57020 60071 72006"
+    TEST_ATTRS = ["present_weather", "past_weather"]
+    expected = {
+        "present_weather": {
+            "value": 20,
+            "_table": "4677",
+            "time_before_obs": {
+                "value": 6,
+                "unit": "h"
+            }
+        },
+        "past_weather": [
+            { "value": 0, "_table": "4561" },
+            { "value": 6, "_table": "4561" }
+        ]
+    }
+
 class TestSynopException:
     """
     Tests the various exceptions

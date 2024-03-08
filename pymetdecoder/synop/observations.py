@@ -574,10 +574,12 @@ class ImportantWeather(Observation):
     _CODE_LEN = 2
     def _decode(self, raw, **kwargs):
         use_4687 = kwargs.get("use_4687", False)
+        ix = kwargs.get("weather_indicator")
+        table = "4680" if ix in [5, 6, 7] else "4677"
         if use_4687:
             return ct.CodeTable4687().decode(raw, **kwargs)
         else:
-            return { "value": int(raw), "_table": "4677", "time_before_obs": kwargs.get("time_before") }
+            return { "value": int(raw), "_table": table, "time_before_obs": kwargs.get("time_before") }
 class LocalPrecipitation(Observation):
     """
     Precipitation character and time of precipitation for Region I
@@ -1574,10 +1576,13 @@ class Weather(Observation):
     def _decode(self, group, **kwargs):
         time_before = kwargs.get("time_before")
         w_type = kwargs.get("type")
+        ix = kwargs.get("weather_indicator")
         if w_type == "present":
-            table = "4677"
+            table = "4680" if ix in [5, 6, 7] else "4677"
+            # table = "4677" if ix in [None, 1, 2, 3, 4] else "4680"
         elif w_type == "past":
-            table = "4561"
+            table = "4531" if ix in [5, 6, 7] else "4561"
+            # table = "4561" if ix in [None, 1, 2, 3, 4] else "4531"
         else:
             raise ValueError("{} is not a valid weather type".format(w_type))
 
