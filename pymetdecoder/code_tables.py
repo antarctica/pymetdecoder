@@ -478,6 +478,27 @@ class CodeTable1677(CodeTable):
 
         # If we reach this point, we've been unable to encode
         raise pymetdecoder.EncodeError("Cannot encode visibility {}".format(value))
+class CodeTable1690(CodeTable):
+    """
+    Height
+    """
+    _TABLE = "1690"
+    def _decode(self, hhh):
+        hhh = int(hhh)
+        quantifier = None
+        if hhh == 0:
+            value = 30
+            quantifier = "isLess"
+        else:
+            value = 30 * hhh
+        return { "value": value, "quantifier": quantifier }
+    def _encode(self, data):
+        value = data["value"] if "value" in data else None
+        if value < 30:
+            code = 0
+        else:
+            code = int(value / 30)
+        return "{:03d}".format(code)
 class CodeTable1751(CodeTable):
     """
     Ice accretion on ships
@@ -1114,6 +1135,104 @@ class CodeTable4451(CodeTable):
 
         # Return value from range
         return self.encode_range(data, unit_range)
+class CodeTable4678(CodeTable):
+    """
+    Significant present and forecast weather
+    """
+    _TABLE = "4678"
+    _LOOKUP = {
+        "intensity": {
+            "-": "light",
+            "": "moderate",
+            "+": "heavy",
+            "VC": "in vicinity"
+        },
+        "descriptor": {
+            "MI": "shallow",
+            "BC": "patches",
+            "PR": "partial",
+            "DR": "low drifting",
+            "BL": "blowing",
+            "SH": "shower(s)",
+            "TS": "thunderstorm",
+            "FZ": "freezing"
+        },
+        "precipitation": {
+            "DZ": "drizzle",
+            "RA": "rain",
+            "SN": "snow",
+            "SG": "snow grains",
+            "PL": "ice pellets",
+            "GR": "hail",
+            "GS": "small hail and/or snow pellets",
+            "UP": "unknown precipitation"
+        },
+        "obscuration": {
+            "BR": "mist",
+            "FG": "fog",
+            "FU": "smoke",
+            "VA": "volcanic ash",
+            "DU": "widespread dust",
+            "SA": "sand",
+            "HZ": "haze"
+        },
+        "other": {
+            "PO": "dust/sand whirls (dust devils)",
+            "SQ": "squalls",
+            "FC": "funnel cloud(s) (tornado or waterspout)",
+            "SS": "sandstorm",
+            "DS": "duststorm"
+        }
+    }
+    def _decode(self, ww):
+        codes = []
+        try:
+            codes.append(re.match(r"^(\+|\-|(VC))", ww).groups()[0])
+        except:
+            codes.append("")
+        codes += re.findall("..", ww[len(codes[0]):])
+        
+        data = {}
+        for c in codes:
+            found = False
+            for t, table in self._LOOKUP.items():
+                if found:
+                    break
+                if c in table:
+                    if t in ["obscuration", "other"] and "intensity" in data:
+                        del(data["intensity"])
+                    if t in ["precipitation"]:
+                        if t not in data:
+                            data[t] = []
+                        data[t].append(table[c])
+                    else:
+                        data[t] = table[c]
+                    found = True
+            if not found:
+                raise ValueError(ww)
+                # if found:
+                #     continue
+                # for k, v in table.items():
+                #     if k == c:
+                #         data[t] = v
+                #         found = True
+        return data
+        # print(ww)
+        # table = self._LOOKUP[kwargs.get("val_type")]
+        # return { "value": table[ww] }
+    def _encode(self, data):
+        val = []
+        for t, table in self._LOOKUP.items():
+            if t in data:
+                if not isinstance(data[t], list):
+                    vals = [data[t]]
+                else:
+                    vals = data[t]
+                for k, v in table.items():
+                    if v in vals:
+                        val.append(k)
+
+        return "".join(val)
 class CodeTable4687(CodeTable):
     """
     Present weather phenomenon not specified in Code table 4677, or specification
@@ -1172,7 +1291,7 @@ class CodeTable168(CodeTable):
         R = int(R)
         (min, max, quantifier) = (None, None, None)
         if R == 0:
-            return { "value": None }
+            return None
         else:
             (min, max) = self._RANGE[R]
             if max is None:
