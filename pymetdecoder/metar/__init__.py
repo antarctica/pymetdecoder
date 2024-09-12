@@ -26,6 +26,7 @@ SECTIONS =  [
     ("runway_visual_range", obs.RunwayVisual, True),
     ("present_weather", obs.PresentWeather, True),
     ("cloud_types", obs.CloudAmountHeight, True),
+    ("vertical_visibility", obs.VerticalVisibility, False),
     ("temperature", obs.Temperature, False),
     ("qnh", obs.QNH, False),
     ("recent_weather", obs.RecentWeather, False),
@@ -139,6 +140,11 @@ class METAR(pymetdecoder.Report):
                     grp = next(groups)
                 else:
                     break
+
+            # Determine vertical visibility
+            if re.match(r"^VV(\d{3})$", grp):
+                parse_groups["vertical_visibility"] = grp[2:]
+                grp = next(groups)
 
             # Determine temperature
             # if re.match(r"(M)?(\d){2}", grp):

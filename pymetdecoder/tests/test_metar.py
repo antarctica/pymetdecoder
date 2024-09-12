@@ -343,7 +343,7 @@ class TestNonStandardMetar(BaseTestMetar):
         "is_special": False,
         "callsign": { "value": "SYCJ" },
         "obs_time": {
-            "day":    { "value": 11  },
+            "day":    { "value": 11 },
             "hour":   { "value": 17 },
             "minute": { "value": 0  }
         },
@@ -372,3 +372,48 @@ class TestNonStandardMetar(BaseTestMetar):
         "recent_weather": { "_table": "4678", "descriptor": "thunderstorm" },
         "trend": { "change": "NOSIG" }
     }
+class TestVerticalVisibility(BaseTestMetar):
+    """
+    Tests vertical visibility is decoded correctly
+    """
+    METAR = "METAR SBCC 081300Z 12003KT 0300 R12/0400N FU VV001 31/12 Q1016"
+    expected = {
+        "is_special": False,
+        "callsign": { "value": "SBCC" },
+        "obs_time": {
+            "day":    { "value": 8  },
+            "hour":   { "value": 13 },
+            "minute": { "value": 0  }
+        },
+        "is_automatic": False,
+        "surface_wind": {
+            "direction": { "value": 120, "unit": "deg", "variable": False },
+            "speed": { "value": 3, "unit": "KT" },
+            "gust": None,
+            "variation": None
+        },
+        "prevailing_visibility": { "value": 300, "min": 300, "max": 350, "unit": "m", "direction": None },
+        "runway_visual_range": [{
+            "runway": { "value": "12" },
+            "visibility": { "value": 400, "unit": "m", "tendency": "none" }
+        }],
+        "present_weather": [
+            { "_table": "4678", "obscuration": "smoke" }
+        ],
+        "vertical_visibility": { "_table": '1690', "value": 30, "quantifier": None, "_code": 1, "unit": "m" },
+        # "cloud_types": [{
+        #     "amount": { "value": "FEW", "min": 1, "max": 2, "unit": "okta", "significant_cloud": True },
+        #     "height": { "_table": "1690", "value": 510, "quantifier": None, "_code": 17, "unit": "m" },
+        #     "convective": { "cumulonimbus": True, "towering_cumulus": False, "not_observable": False }
+        # },{
+        #     "amount": { "value": "BKN", "min": 5, "max": 7, "unit": "okta", "significant_cloud": True },
+        #     "height": { "_table": "1690", "value": 1140, "quantifier": None, "_code": 38, "unit": "m" },
+        #     "convective": { "cumulonimbus": False, "towering_cumulus": True, "not_observable": False }
+        # }],
+        "temperature": {
+            "air_temperature": { "value": 31, "unit": "Cel", "min": 30.5, "max": 31.5 },
+            "dew_point_temperature": { "value": 12, "unit": "Cel", "min": 11.5, "max": 12.5 }
+        },
+        "qnh": { "value": 1016, "unit": "hPa" }
+    }
+   

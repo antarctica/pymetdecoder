@@ -260,9 +260,6 @@ class QNH(Observation):
             Q = prefix,
             qnh = "{:04d}".format(qnh)
         )
-        # return "Q{qnh}".format(
-        #     qnh = "{:04d}".format(data["value"])
-        # )
 class RecentWeather(Observation):
     """
     Recent weather phenomena of operational significance
@@ -279,6 +276,7 @@ class Remarks(Observation):
     """
     Remarks which appear at the end of a METAR
     """
+    _ENCODE_DEFAULT = "RMK"
     def _decode(self, remarks):
         return " ".join(remarks)
     def _encode(self, data):
@@ -379,7 +377,7 @@ class RunwayVisual(Observation):
                     output += [x for x in self._EXTREMES if self._EXTREMES[x] == data["quantifier"]][0]
                 except:
                     pass
-                output += str(data["value"])
+                output += "{:04d}".format(data["value"])
                 try:
                     output += [x for x in self._TENDENCIES if self._TENDENCIES[x] == data["tendency"]][0]
                 except:
@@ -391,7 +389,7 @@ class RunwayVisual(Observation):
                         output += [x for x in self._EXTREMES if self._EXTREMES[x] == v[a]["quantifier"]][0]
                     except:
                         pass
-                    output += str(v[a]["value"])
+                    output += "{:04d}".format(v[a]["value"])
                     try:
                         output += [x for x in self._TENDENCIES if self._TENDENCIES[x] == v[a]["tendency"]][0]
                     except:
@@ -578,7 +576,15 @@ class Trend(Observation):
             ("hour", 2, 2, Hour),
             ("minute", 4, 2, Minute),
         ]
-
+class VerticalVisibility(Observation):
+    """
+    Vertical visibility
+    """
+    _CODE_LEN = 3
+    _CODE_TABLE = ct.CodeTable1690
+    _UNIT = "m"
+    def _encode(self, data):
+        return "VV{:03d}".format(self._CODE_TABLE().encode(data))
 class Visibility(Observation):
     """
     Visibility
