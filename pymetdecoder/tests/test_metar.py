@@ -67,18 +67,16 @@ class TestSimpleMetar(BaseTestMetar):
         },
         "prevailing_visibility": { "value": 10000, "unit": "m", "quantifier": "isGreaterThan", "direction": None },
         "cloud_types": [{
-            "amount": { "value": "FEW", "min": 1, "max": 2, "unit": "okta", "significant_cloud": True },
+            "amount": { "value": "FEW", "min": 1, "max": 2, "unit": "okta", "clouds_detected": True },
             "height": { "_table": "1690", "value": 900, "quantifier": None, "_code": 30, "unit": "m" },
             "convective": { "cumulonimbus": False, "towering_cumulus": False, "not_observable": False }
         },{
-            "amount": { "value": "SCT", "min": 3, "max": 4, "unit": "okta", "significant_cloud": True },
+            "amount": { "value": "SCT", "min": 3, "max": 4, "unit": "okta", "clouds_detected": True },
             "height": { "_table": "1690", "value": 2400, "quantifier": None, "_code": 80, "unit": "m" },
             "convective": { "cumulonimbus": False, "towering_cumulus": False, "not_observable": False }
         }],
-        "temperature": {
-            "air_temperature": { "value": 31, "unit": "Cel", "min": 30.5, "max": 31.5 },
-            "dew_point_temperature": { "value": 19, "unit": "Cel", "min": 18.5, "max": 19.5 }
-        },
+        "air_temperature": { "value": 31, "unit": "Cel", "min": 30.5, "max": 31.5 },
+        "dewpoint_temperature": { "value": 19, "unit": "Cel", "min": 18.5, "max": 19.5 },
         "qnh": { "value": 1010, "unit": "hPa" }
     }
 class TestSpeci(BaseTestMetar):
@@ -106,14 +104,12 @@ class TestSpeci(BaseTestMetar):
         },
         "prevailing_visibility": { "value": 10000, "unit": "m", "quantifier": "isGreaterThan", "direction": None },
         "cloud_types": [{
-            "amount": { "value": "FEW", "min": 1, "max": 2, "unit": "okta", "significant_cloud": True },
+            "amount": { "value": "FEW", "min": 1, "max": 2, "unit": "okta", "clouds_detected": True },
             "height": { "_table": "1690", "value": 360, "quantifier": None, "_code": 12, "unit": "m" },
             "convective": { "cumulonimbus": False, "towering_cumulus": False, "not_observable": False }
         }],
-        "temperature": {
-            "air_temperature": { "value": 17, "unit": "Cel", "min": 16.5, "max": 17.5 },
-            "dew_point_temperature": { "value": 15, "unit": "Cel", "min": 14.5, "max": 15.5 }
-        },
+        "air_temperature": { "value": 17, "unit": "Cel", "min": 16.5, "max": 17.5 },
+        "dewpoint_temperature": { "value": 15, "unit": "Cel", "min": 14.5, "max": 15.5 },
         "qnh": { "value": 1013, "unit": "hPa" }
     }
 class TestComplexMetar(BaseTestMetar):
@@ -160,14 +156,12 @@ class TestComplexMetar(BaseTestMetar):
             { "_table": "4678", "obscuration": "smoke" }
         ],
         "cloud_types": [{ 
-            "amount": { "value": None, "significant_cloud": False },
+            "amount": { "value": None, "clouds_detected": True },
             "height": None,
             "convective": { "cumulonimbus": False, "towering_cumulus": False, "not_observable": False }
         }],
-        "temperature": {
-            "air_temperature": { "value": 0, "unit": "Cel", "min": 0, "max": 0.5 },
-            "dew_point_temperature": { "value": 0, "unit": "Cel", "min": -0.5, "max": 0 }
-        },
+        "air_temperature": { "value": 0, "unit": "Cel", "min": 0, "max": 0.5 },
+        "dewpoint_temperature": { "value": 0, "unit": "Cel", "min": -0.5, "max": 0 },
         "qnh": { "value": 987, "unit": "hPa" }
     }
 class TestCORAtStart(BaseTestMetar):
@@ -193,14 +187,12 @@ class TestCORAtStart(BaseTestMetar):
         },
         "prevailing_visibility": { "value": 10000, "unit": "m", "quantifier": "isGreaterThan", "direction": None },
         "cloud_types": [{
-            "amount": { "value": "FEW", "min": 1, "max": 2, "unit": "okta", "significant_cloud": True },
+            "amount": { "value": "FEW", "min": 1, "max": 2, "unit": "okta", "clouds_detected": True },
             "height": { "_table": "1690", "value": 540, "quantifier": None, "_code": 18, "unit": "m" },
             "convective": { "cumulonimbus": False, "towering_cumulus": False, "not_observable": False }
         }],
-        "temperature": {
-            "air_temperature": { "value": 32, "unit": "Cel", "min": 31.5, "max": 32.5 },
-            "dew_point_temperature": { "value": 23, "unit": "Cel", "min": 22.5, "max": 23.5 }
-        },
+        "air_temperature": { "value": 32, "unit": "Cel", "min": 31.5, "max": 32.5 },
+        "dewpoint_temperature": { "value": 23, "unit": "Cel", "min": 22.5, "max": 23.5 },
         "qnh": { "value": 1010, "unit": "hPa" }
     }
 class TestCORInMiddle(TestCORAtStart):
@@ -234,10 +226,8 @@ class TestCAVOK(BaseTestMetar):
             "variation": None
         },
         "cavok": True,
-        "temperature": {
-            "air_temperature": { "value": 20, "unit": "Cel", "min": 19.5, "max": 20.5 },
-            "dew_point_temperature": { "value": 17, "unit": "Cel", "min": 16.5, "max": 17.5 }
-        },
+        "air_temperature": { "value": 20, "unit": "Cel", "min": 19.5, "max": 20.5 },
+        "dewpoint_temperature": { "value": 17, "unit": "Cel", "min": 16.5, "max": 17.5 },
         "qnh": { "value": 1015, "unit": "hPa" }
     }
 class TestWindGustAndVariation(BaseTestMetar):
@@ -261,10 +251,8 @@ class TestWindGustAndVariation(BaseTestMetar):
             "variation": { "from": 80, "to": 150, "unit": "deg" }
         },
         "cavok": True,
-        "temperature": {
-            "air_temperature": { "value": 30, "unit": "Cel", "min": 29.5, "max": 30.5 },
-            "dew_point_temperature": { "value": 21, "unit": "Cel", "min": 20.5, "max": 21.5 }
-        },
+        "air_temperature": { "value": 30, "unit": "Cel", "min": 29.5, "max": 30.5 },
+        "dewpoint_temperature": { "value": 21, "unit": "Cel", "min": 20.5, "max": 21.5 },
         "qnh": { "value": 1014, "unit": "hPa" }
     }
 class BaseTrendsTest(BaseTestMetar):
@@ -310,7 +298,7 @@ class TestTrendsTEMPO(BaseTrendsTest):
             { "_table": "4678", "intensity": "light", "precipitation": ["rain", "snow"], "descriptor": "shower(s)" }
         ],
         "cloud_types": [{
-            "amount": { "value": "SCT", "min": 3, "max": 4, "unit": "okta", "significant_cloud": True },
+            "amount": { "value": "SCT", "min": 3, "max": 4, "unit": "okta", "clouds_detected": True },
             "height": { "_table": "1690", "value": 450, "quantifier": None, "_code": 15, "unit": "m" },
             "convective": { "cumulonimbus": False, "towering_cumulus": False, "not_observable": False }
         }]
@@ -328,7 +316,7 @@ class TestTrendsBECMG(BaseTrendsTest):
             "minute": { "value": 30 }
         },
         "cloud_types": [{
-            "amount": { "value": "SCT", "min": 3, "max": 4, "unit": "okta", "significant_cloud": True },
+            "amount": { "value": "SCT", "min": 3, "max": 4, "unit": "okta", "clouds_detected": True },
             "height": { "_table": "1690", "value": 360, "quantifier": None, "_code": 12, "unit": "m" },
             "convective": { "cumulonimbus": False, "towering_cumulus": False, "not_observable": False }
         }]
@@ -356,18 +344,16 @@ class TestNonStandardMetar(BaseTestMetar):
         },
         "prevailing_visibility": { "value": 5, "unit": "[mi_us]", "direction": None },
         "cloud_types": [{
-            "amount": { "value": "FEW", "min": 1, "max": 2, "unit": "okta", "significant_cloud": True },
+            "amount": { "value": "FEW", "min": 1, "max": 2, "unit": "okta", "clouds_detected": True },
             "height": { "_table": "1690", "value": 510, "quantifier": None, "_code": 17, "unit": "m" },
             "convective": { "cumulonimbus": True, "towering_cumulus": False, "not_observable": False }
         },{
-            "amount": { "value": "BKN", "min": 5, "max": 7, "unit": "okta", "significant_cloud": True },
+            "amount": { "value": "BKN", "min": 5, "max": 7, "unit": "okta", "clouds_detected": True },
             "height": { "_table": "1690", "value": 1140, "quantifier": None, "_code": 38, "unit": "m" },
             "convective": { "cumulonimbus": False, "towering_cumulus": True, "not_observable": False }
         }],
-        "temperature": {
-            "air_temperature": { "value": 28, "unit": "Cel", "min": 27.5, "max": 28.5 },
-            "dew_point_temperature": { "value": 25, "unit": "Cel", "min": 24.5, "max": 25.5 }
-        },
+        "air_temperature": { "value": 28, "unit": "Cel", "min": 27.5, "max": 28.5 },
+        "dewpoint_temperature": { "value": 25, "unit": "Cel", "min": 24.5, "max": 25.5 },
         "qnh": { "value": 29.92, "unit": "inHg" },
         "recent_weather": { "_table": "4678", "descriptor": "thunderstorm" },
         "trend": { "change": "NOSIG" }
@@ -410,10 +396,8 @@ class TestVerticalVisibility(BaseTestMetar):
         #     "height": { "_table": "1690", "value": 1140, "quantifier": None, "_code": 38, "unit": "m" },
         #     "convective": { "cumulonimbus": False, "towering_cumulus": True, "not_observable": False }
         # }],
-        "temperature": {
-            "air_temperature": { "value": 31, "unit": "Cel", "min": 30.5, "max": 31.5 },
-            "dew_point_temperature": { "value": 12, "unit": "Cel", "min": 11.5, "max": 12.5 }
-        },
+        "air_temperature": { "value": 31, "unit": "Cel", "min": 30.5, "max": 31.5 },
+        "dewpoint_temperature": { "value": 12, "unit": "Cel", "min": 11.5, "max": 12.5 },
         "qnh": { "value": 1016, "unit": "hPa" }
     }
    

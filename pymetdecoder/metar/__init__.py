@@ -12,26 +12,29 @@ import re, pymetdecoder
 from . import observations as obs
 
 # Define the sections
-# Tuple: (keyword, obs_class, is_array)
+# Tuple: (keyword, obs_class, is_array, include_if_cavok)
 SECTIONS =  [
-    ("is_special", obs.IsSpecial, False),
-    ("is_corrected", obs.IsCorrected, False),
-    ("callsign", obs.Callsign, False),
-    ("obs_time", obs.ObservationTime, False),
-    ("is_automatic", obs.IsAutomatic, False),
-    ("surface_wind", obs.SurfaceWind, False),
-    ("cavok", None, False),
-    ("prevailing_visibility", obs.Visibility, False),
-    ("visibility_variation", obs.Visibility, False),
-    ("runway_visual_range", obs.RunwayVisual, True),
-    ("present_weather", obs.PresentWeather, True),
-    ("cloud_types", obs.CloudAmountHeight, True),
-    ("vertical_visibility", obs.VerticalVisibility, False),
-    ("temperature", obs.Temperature, False),
-    ("qnh", obs.QNH, False),
-    ("recent_weather", obs.RecentWeather, False),
-    ("trend", obs.Trend, False),
-    ("remarks", obs.Remarks, False)
+    ("is_special", obs.IsSpecial, False, True),
+    ("is_corrected", obs.IsCorrected, False, True),
+    ("callsign", obs.Callsign, False, True),
+    ("obs_time", obs.ObservationTime, False, True),
+    ("is_automatic", obs.IsAutomatic, False, True),
+    ("surface_wind", obs.SurfaceWind, False, True),
+    ("cavok", obs.IsCAVOK, False, True),
+    ("prevailing_visibility", obs.Visibility, False, False),
+    ("visibility_variation", obs.Visibility, False, False),
+    ("runway_visual_range", obs.RunwayVisual, True, False),
+    ("present_weather", obs.PresentWeather, True, False),
+    ("cloud_types", obs.CloudAmountHeight, True, False),
+    ("vertical_visibility", obs.VerticalVisibility, False, False),
+    [
+        ("air_temperature", obs.Temperature, False, True),
+        ("dewpoint_temperature", obs.Temperature, False, True)
+    ],
+    ("qnh", obs.QNH, False, True),
+    ("recent_weather", obs.RecentWeather, False, True),
+    ("trend", obs.Trend, False, True),
+    ("remarks", obs.Remarks, False, True)
 ]
 ################################################################################
 # REPORT CLASSES
@@ -96,10 +99,7 @@ class METAR(pymetdecoder.Report):
             # Determine visibility
             vis_groups = []
             if grp == "CAVOK":
-                # this has data going into visiblity, clouds and weather, so
-                # will have to deal with this slightly differently
-                # for now, just set CAVOK to true
-                parse_groups["cavok"] = True
+                parse_groups["cavok"] = grp
                 grp = next(groups)
             else:
                 while True:
@@ -108,29 +108,29 @@ class METAR(pymetdecoder.Report):
                         grp = next(groups)
                     else:
                         break
-                    # vis_groups.append(grp)
-                    # grp = next(groups)
-                    # if not re.match(r"^R\d{2}", grp):
-                    #     break
-            for v in vis_groups:
-                if re.match(r"^R\d{2}", v):
-                    if "runway_visual_range" not in parse_groups:
-                        parse_groups["runway_visual_range"] = []
-                    parse_groups["runway_visual_range"].append(v)
-                else:
-                    if "prevailing_visibility" in parse_groups:
-                        parse_groups["visibility_variation"] = v
+                        # vis_groups.append(grp)
+                        # grp = next(groups)
+                        # if not re.match(r"^R\d{2}", grp):
+                        #     break
+                for v in vis_groups:
+                    if re.match(r"^R\d{2}", v):
+                        if "runway_visual_range" not in parse_groups:
+                            parse_groups["runway_visual_range"] = []
+                        parse_groups["runway_visual_range"].append(v)
                     else:
-                        parse_groups["prevailing_visibility"] = v
+                        if "prevailing_visibility" in parse_groups:
+                            parse_groups["visibility_variation"] = v
+                        else:
+                            parse_groups["prevailing_visibility"] = v
 
-            # Determine present weather
-            parse_groups["present_weather"] = []
-            while True:
-                if re.match(obs.RE_PRESENT_WEATHER, grp):
-                    parse_groups["present_weather"].append(grp)
-                    grp = next(groups)
-                else:
-                    break
+                # Determine present weather
+                parse_groups["present_weather"] = []
+                while True:
+                    if re.match(obs.RE_PRESENT_WEATHER, grp):
+                        parse_groups["present_weather"].append(grp)
+                        grp = next(groups)
+                    else:
+                        break
 
             # Determine clouds
             parse_groups["cloud_types"] = []
@@ -148,8 +148,11 @@ class METAR(pymetdecoder.Report):
 
             # Determine temperature
             # if re.match(r"(M)?(\d){2}", grp):
-            if re.match(r"^(M)?(\d{2}|\/\/)\/(M)?(\d{2}|\/\/)", grp):
-                parse_groups["temperature"] = grp
+            temp_re = re.match(obs.RE_TEMPERATURE, grp)
+            if temp_re:
+                (Ts, TT, Tds, Td) = temp_re.groups()
+                parse_groups["air_temperature"] = "{}{}".format(Ts if Ts is not None else "", TT)
+                parse_groups["dewpoint_temperature"] = "{}{}".format(Tds if Tds is not None else "", Td)
                 grp = next(groups)
 
             # Determine QNH
@@ -193,7 +196,19 @@ class METAR(pymetdecoder.Report):
             raise StopIteration
         except StopIteration:
             # Process each section
+            # print([a for a in SECTIONS for x in a])
+            all_sections = []
             for s in SECTIONS:
+                if isinstance(s, list):
+                    all_sections += s
+                else:
+                    all_sections.append(s)
+
+            cavok = False
+            for s in all_sections:
+                if cavok and not s[3]:
+                    continue
+
                 if s[0] in parse_groups:
                     if s[1] is None:
                         data[s[0]] = parse_groups[s[0]]
@@ -208,6 +223,8 @@ class METAR(pymetdecoder.Report):
                             data[s[0]].append(s[1]().decode(d))
                     else:
                         data[s[0]] = s[1]().decode(parse_groups[s[0]])
+                    if s[0] == "cavok":
+                        cavok = data[s[0]]
         except UnboundLocalError as e:
             # import traceback
             # traceback.print_exc()
@@ -216,7 +233,7 @@ class METAR(pymetdecoder.Report):
         # Return the data
         return data
         
-    def _encode(self, data, **kwargs):
+    def _encode(self, data, calc_cavok=True, **kwargs):
         """
         Encodes the METAR from data
         """
@@ -224,14 +241,40 @@ class METAR(pymetdecoder.Report):
         groups = []
 
         # Process each section
-        for s in SECTIONS:
-            if s[0] == "cavok" and "cavok" in data:
-                groups.append("CAVOK")
-                continue
-            if s[0] in data:
-                group = s[1]().encode(data[s[0]])
+        joined = None
+        cavok = False
+        for s in SECTIONS:         
+            if isinstance(s, tuple):
+                if cavok and not s[3]:
+                    continue             
+                group = None
+                # if s[0] == "cavok":
+                    # group = s[1]().encode(data[s[0]])
+                if s[0] == "cavok":
+                    if "cavok" in data:
+                        v = data["cavok"]
+                    elif calc_cavok:
+                        v = ""
+                    else:
+                        v = None
+                    group = s[1]().encode(v, data=data)
+                    if group is not None:
+                        cavok = True
+                elif s[0] in data:
+                    group = s[1]().encode(data[s[0]])
                 if group is not None:
                     groups.append(group)
+            else:
+                this_group = []
+                for x in s:
+                    if cavok and not x[3]:
+                        continue
+                    try:
+                        group = x[1]().encode(data[x[0]])
+                    except:
+                        group = x[1]().encode(None)
+                    this_group.append(group)
+                groups.append("/".join(this_group))             
 
         # Return the encoded report
         return " ".join(groups)

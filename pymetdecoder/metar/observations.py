@@ -13,8 +13,9 @@ from pymetdecoder import Observation, logging, DecodeError, EncodeError, Invalid
 from pymetdecoder import code_tables as ct
 
 # Define common regular expressions here
-RE_PRESENT_WEATHER = r"^[\+\-]?([A-Z]{2})+$"
+RE_PRESENT_WEATHER = r"^(NSW|[\+\-]?([A-Z]{2}))+$"
 RE_SURFACE_WIND = r"^(\d){3}V(\d){3}$"
+RE_TEMPERATURE = r"^(M)?(\d{2}|\/\/)\/(M)?(\d{2}|\/\/)$"
 ################################################################################
 # SHARED CLASSES
 ################################################################################
@@ -63,6 +64,7 @@ class CloudAmountHeight(Observation):
     * NNN - cloud amount
     * hhh - cloud height
     """
+    _CODE_LEN = 6
     def _decode(self, cloud):
         try:
             (NNN, hhh, convective) = re.match(r"^([A-Z]{3})([0-9]*)(CB|TCU|\/\/\/)?$", cloud).groups()
@@ -77,7 +79,7 @@ class CloudAmountHeight(Observation):
         clouds = []
         for d in data:
             NNN = self.Amount().encode(d["amount"] if "amount" in d else None, allow_none=True)
-            if NNN not in ["NSC", "NCD"]:
+            if NNN not in ["NSC", "NCD", "SKC"]:
                 hhh = self.Height().encode(d["height"] if "height" in d else None, allow_none=True)
                 clouds.append("{NNN}{hhh}{cu}".format(
                     NNN = NNN,
@@ -91,30 +93,32 @@ class CloudAmountHeight(Observation):
         """
         Cloud amount
         """
-        _VALID_VALUES = ["NSC", "NCD", "FEW", "SCT", "BKN", "OVC"]
+        _VALID_VALUES = ["NSC", "NCD", "SKC", "FEW", "SCT", "BKN", "OVC"]
         _VALID_RANGE = (0, 8)
         def _decode(self, NNN):
             if NNN == "NSC":
-                return { "value": None, "significant_cloud": False }
+                return { "value": None, "clouds_detected": True }
             elif NNN == "NCD":
-                return { "value": 0, "unit": "okta", "significant_cloud": False }
+                return { "value": None, "clouds_detected": False },
+            elif NNN == "SKC":
+                return { "value": 0, "unit": "okta", "clouds_detected": True  }
             elif NNN == "FEW":
-                return { "value": NNN, "min": 1, "max": 2, "unit": "okta", "significant_cloud": True }
+                return { "value": NNN, "min": 1, "max": 2, "unit": "okta", "clouds_detected": True  }
             elif NNN == "SCT":
-                return { "value": NNN, "min": 3, "max": 4, "unit": "okta", "significant_cloud": True }
+                return { "value": NNN, "min": 3, "max": 4, "unit": "okta", "clouds_detected": True  }
             elif NNN == "BKN":
-                return { "value": NNN, "min": 5, "max": 7, "unit": "okta", "significant_cloud": True }
+                return { "value": NNN, "min": 5, "max": 7, "unit": "okta", "clouds_detected": True  }
             elif NNN == "OVC":
-                return { "value": 8, "unit": "okta", "significant_cloud": True }
+                return { "value": 8, "unit": "okta" }
             else:
                 raise InvalidCode(NNN, "cloud amount")
         def _encode(self, data, **kwargs):
-            if not data["significant_cloud"]:
-                return "NSC" if data["value"] is None else "NCD"
+            if data["value"] is None:
+                return "NSC" if data["clouds_detected"] else "NCD"
 
             if isinstance(data["value"], int):
                 if data["value"] == 0:
-                    return "NCD"
+                    return "SKC"
                 elif 1 <= data["value"] <= 2:
                     return "FEW"
                 elif 3 <= data["value"] <= 4:
@@ -165,6 +169,46 @@ class IsAutomatic(Observation):
             raise DecodeError("Cannot determine if report is automatic from {}".format(ob_type))
     def _encode(self, data):
         return "AUTO" if data else None
+class IsCAVOK(Observation):
+    """
+    CAVOK (Cloud And Visibility OK)
+    """
+    _ENCODE_DEFAULT = None
+    def _decode(self, cavok):
+        return True if cavok == "CAVOK" else False
+    def _encode(self, cavok, data={}):
+        # If we already have a boolean for CAVOK (i.e. it's been calculated elsewhere
+        # or obtained from a decoded METAR), then do not calculate.
+        if isinstance(cavok, bool):
+            return "CAVOK" if cavok else None
+
+        # Determine CAVOK by looking at other observations
+        try:
+            # Visibility must be >= 10km. If not, no CAVOK
+            if data["prevailing_visibility"]["value"] < 10000:
+                return None
+
+            # No visibility variation (VVVVD) is allowed
+            if "visibility_variation" in data:
+                return None
+
+            # No clouds below 1500m (5000 ft) and no convective clouds
+            for c in data["cloud_types"]:
+                if c["height"] is not None and c["height"] < 1500:
+                    return None
+                if any([k for k in c["convective"].values()]):
+                    return None
+
+            # No significant weather
+            print(data["present_weather"])
+            for w in data["present_weather"]:
+                if not w["no_significant_weather"] or "no_significant_weather" not in w:
+                    return None
+        except KeyError:
+            return None
+
+        # If we have reached this point, we have CAVOK
+        return "CAVOK"
 class IsCorrected(Observation):
     """
     Is this a corrected (COR) obs?
@@ -221,12 +265,19 @@ class PresentWeather(Observation):
     """
     Present weather
     """
+    _ENCODE_DEFAULT = None
     def _decode(self, ww):
-        return ct.CodeTable4678().decode(ww)
+        if ww == "NSW":
+            return { "no_significant_weather": True }
+        else:
+            return ct.CodeTable4678().decode(ww)
     def _encode(self, data):
         weather = []
         for d in data:
-            weather.append(ct.CodeTable4678().encode(d))
+            if "no_significant_weather" in d and d["no_significant_weather"]:
+                weather.append("NSW")
+            else:
+                weather.append(ct.CodeTable4678().encode(d))
         return " ".join(weather)
 class QNH(Observation):
     """
@@ -486,43 +537,43 @@ class Temperature(Observation):
     * T'T'/Td'Td' - air temperature and dew point temperature
     """
     _CODE_LEN = 5
-    def _decode(self, data):
-        try:
-            (Ts, TT, Tds, Td) = re.match(r"^(M)?(\d{2}|\/\/)\/(M)?(\d{2}|\/\/)", data).groups()
-            TT = "{}{}".format(Ts if Ts is not None else "", TT)
-            Td = "{}{}".format(Tds if Tds is not None else "", Td)
-        except:
-            raise InvalidCode(data, "temperature")
+    # def _decode(self, data):
+    #     try:
+    #         (Ts, TT, Tds, Td) = re.match(r"^(M)?(\d{2}|\/\/)\/(M)?(\d{2}|\/\/)", data).groups()
+    #         TT = "{}{}".format(Ts if Ts is not None else "", TT)
+    #         Td = "{}{}".format(Tds if Tds is not None else "", Td)
+    #     except:
+    #         raise InvalidCode(data, "temperature")
         
-        return {
-            "air_temperature": self.Temperature().decode(TT),
-            "dew_point_temperature": self.Temperature().decode(Td)
-        }
+    #     return {
+    #         "air_temperature": self.Temperature().decode(TT),
+    #         "dew_point_temperature": self.Temperature().decode(Td)
+    #     }
+    # def _encode(self, data):
+    #     return "{TT}/{Td}".format(
+    #         TT = self.Temperature().encode(data["air_temperature"] if "air_temperature" in data else None),
+    #         Td = self.Temperature().encode(data["dew_point_temperature"] if "dew_point_temperature" in data else None)
+    #     )
+class Temperature(Observation):
+    _ENCODE_DEFAULT = "//"
+    def _decode(self, data):
+        if data.startswith("M"):
+            val = int(data[1:]) * -1
+        else:
+            val = int(data)
+        if val == 0:
+            tmin = -0.5 if data.startswith("M") else 0
+            tmax = 0 if data.startswith("M") else 0.5
+        else:
+            tmin = val - 0.5
+            tmax = val + 0.5
+        return { "value": val, "unit": "Cel", "min": tmin, "max": tmax }
     def _encode(self, data):
-        return "{TT}/{Td}".format(
-            TT = self.Temperature().encode(data["air_temperature"] if "air_temperature" in data else None),
-            Td = self.Temperature().encode(data["dew_point_temperature"] if "dew_point_temperature" in data else None)
-        )
-    class Temperature(Observation):
-        _ENCODE_DEFAULT = "//"
-        def _decode(self, data):
-            if data.startswith("M"):
-                val = int(data[1:]) * -1
-            else:
-                val = int(data)
-            if val == 0:
-                tmin = -0.5 if data.startswith("M") else 0
-                tmax = 0 if data.startswith("M") else 0.5
-            else:
-                tmin = val - 0.5
-                tmax = val + 0.5
-            return { "value": val, "unit": "Cel", "min": tmin, "max": tmax }
-        def _encode(self, data):
-            val = round(data["value"])
-            if val < 0 or "min" in data and data["min"] < 0:
-                return "M{:02d}".format(abs(val))
-            else:
-                return "{:02d}".format(val)
+        val = round(data["value"])
+        if val < 0 or "min" in data and data["min"] < 0:
+            return "M{:02d}".format(abs(val))
+        else:
+            return "{:02d}".format(val)
 class Trend(Observation):
     """
     NOSIG, TEMPO and BECMG trends
@@ -626,6 +677,8 @@ class Visibility(Observation):
         except:
             raise DecodeError("Could not convert {} to a visibility value".format(value))
     def _encode(self, data):
+        if "direction" not in data:
+            data["direction"] = None
         if data["unit"] == "m":
             if data["value"] >= 10000:
                 val = 9999
