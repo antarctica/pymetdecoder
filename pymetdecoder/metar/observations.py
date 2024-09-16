@@ -194,13 +194,12 @@ class IsCAVOK(Observation):
 
             # No clouds below 1500m (5000 ft) and no convective clouds
             for c in data["cloud_types"]:
-                if c["height"] is not None and c["height"] < 1500:
+                if c["height"] is not None and c["height"]["value"] < 1500:
                     return None
                 if any([k for k in c["convective"].values()]):
                     return None
 
             # No significant weather
-            print(data["present_weather"])
             for w in data["present_weather"]:
                 if not w["no_significant_weather"] or "no_significant_weather" not in w:
                     return None

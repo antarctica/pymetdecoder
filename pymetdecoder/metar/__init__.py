@@ -233,6 +233,11 @@ class METAR(pymetdecoder.Report):
         # Return the data
         return data
         
+    def encode(self, data, **kwargs):
+        try:
+            return self._encode(data, **kwargs)
+        except Exception as e:
+            raise EncodeError(str(e))
     def _encode(self, data, calc_cavok=True, **kwargs):
         """
         Encodes the METAR from data
