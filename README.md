@@ -9,6 +9,7 @@ The current version of the module supports the following (in most cases; see Kno
 * SYNOP (FM-12)
 * SHIP (FM-13)
 * SYNOP MOBIL (FM-14)
+* METAR (FM-15) - partial support
 
 ## Example usage
 
@@ -240,6 +241,7 @@ This version is 0.1.4. There may be some uncaught bugs/issues or other problems 
 * Section 5 of the SYNOP messages are not handled yet. Any codes in these sections are stored in the output dict under the `section5` attribute
 * Most of the group 9 codes of section 3 are handled. Any codes not handled are added to a list in the output dict under the `_not_implemented` attribute
 * Some aspects of encoding have not been fully tested
+* Not all elements of METARs are supported, but most simple METARs will work
 
 Feel free to raise any additional issues/bugs in the issue tracker
 
@@ -251,12 +253,11 @@ In future, it is intended that the module will support the following:
 * BUOY (FM-18)
 * TEMP (FM-35)
 * CLIMAT (FM-71)
-* METAR (FM-15)
 
 If you would like to contribute to this module by adding in the functionality to support any of these reports (or other reports), then feel free to do so!
 
 ## License
 
-(c) UK Research and Innovation (UKRI), 2021 - 2023, British Antarctic Survey.
+(c) UK Research and Innovation (UKRI), 2021 - 2024, British Antarctic Survey.
 You may use and re-use this software and associated documentation files free of charge in any format or medium, under the terms of the Open Government Licence v3.0.
 You may obtain a copy of the Open Government Licence at http://www.nationalarchives.gov.uk/doc/open-government-licence/
