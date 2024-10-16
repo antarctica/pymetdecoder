@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## 0.1.5 [2024-10-16]
+
+### Fixed
+
+* (#16) - Pressures > 1050 hPa are now handled correctly
+
 ## 0.1.4 [2023-04-21]
 
 ### Fixed
