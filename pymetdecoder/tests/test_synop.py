@@ -854,3 +854,12 @@ class TestSynopException:
     def test_encode_exception(self):
         with pytest.raises(EncodeError):
             encoded = s.SYNOP().encode(self.data)
+class TestSynopAAXXHighPressure(BaseTestSynop):
+    """
+    Tests a AAXX synop with a pressure > 1050 hPa
+    """
+    SYNOP = "AAXX 09004 08495 11459 30714 10147 20136 30567"
+    TEST_ATTRS = ["station_pressure"]
+    expected = {
+        "station_pressure": { "value": 1056.7, "unit": "hPa" }
+    }
