@@ -1024,6 +1024,19 @@ class TestSynopAAXXWeatherCorrectTablesManual(BaseTestSynop):
             { "value": 6, "_table": "4561" }
         ]
     }
+class TestSynopAAXXTable4077(BaseTestSynop):
+    """
+    Tests the higher time periods in table 4077 resolve correctly
+    """
+    SYNOP = "AAXX 25061 40729 12960 11101 333 90767 93120"
+    TEST_ATTRS = ["snow_fall"]
+    expected = {
+        "snow_fall": {
+            "amount": { "_table": "3870", "value": 200, "quantifier": None, "inaccurate": False, "_code": 20, "unit": "mm" },
+            # "time_before_obs": { "min": 18, "max": None, "quantifier": "isGreater", "unit": "h" }
+            "time_before_obs": { "_table": "4077", "min": 12, "max": 18, "quantifier": None, "_code": 67, "unit": "h" }            
+        }
+    }
 
 class TestSynopException:
     """

@@ -115,7 +115,7 @@ class CodeTable(object):
         # If value specified, calculate code accordingly
         if "value" in data:
             for idx, r in enumerate(data_range):
-                if r[0] <= data <= r[1]:
+                if r[0] <= data["value"] <= r[1]:
                     return str(idx)
 
         # If min/max specified, calculate code accordingly
@@ -920,15 +920,40 @@ class CodeTable4077T(CodeTable):
     Time before observation or duration of phenomena
     """
     _TABLE = "4077"
+    _RANGES = [
+        (6, 7), (7, 8), (8, 9), (9, 10), (10, 11), (11, 12), (12, 18), (18, None)
+    ]
     def _decode(self, t):
         t = int(t)
         if 0 <= t <= 60:
             return { "value": 6 * t, "unit": "min" }
-        elif 61 <= t <= 66:
-            return { "min": t - 55, "max": t - 54, "quantifier": None, "unit": "h" }
+        elif 61 <= t <= 68:
+            (min, max) = self.decode_range(t - 61)
+            quantifier = None
+            if max == None:
+                quantifier = "isGreater"
+            return { "min": min, "max": max, "unit": "h", "quantifier": quantifier }
+        elif t >= 69:
+            return {}
         raise ValueError(t)
     def _encode(self, data):
-        pass
+        try:
+            if data["table"] == "4077":
+                if "value" in data:
+                    val = data["value"]
+                    if data["unit"] == "min":
+                        val = val * 1
+                    elif data["unit"] == "h":
+                        val = val * 60
+                    code = int(val / 6)
+                    if 0 <= code <= 60:
+                        return "{:02d}".format(code)
+                    else:
+                        return "{:02d}".format(int(self.encode_range(data)) + 61)
+                elif "min" in data and "max" in data and data["unit"] == "h":
+                    return "{:02d}".format(int(self.encode_range(data)) + 61)
+        except:
+            return "//"
 class CodeTable4077Z(CodeTable):
     """
     Variation, location or intensity of phenomena
@@ -940,7 +965,8 @@ class CodeTable4077Z(CodeTable):
             return { "value": z }
         raise ValueError(z)
     def _encode(self, data):
-        print(data)
+        if 76 <= data["_code"] <= 99:
+            return data["_code"]
 class CodeTable4300(CodeTable):
     """
     Forecast surface visibility

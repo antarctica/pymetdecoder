@@ -1083,6 +1083,14 @@ class SnowFall(Observation):
             data["time_before_obs"] = time_before
         return data
     def _encode(self, data, **kwargs):
+        try:
+            if data["time_before_obs"]["_table"] == "4077":
+                return "907{tt} 931{ss}".format(
+                    tt = TimeBeforeObs().encode(data["time_before_obs"]),
+                    ss = self.Amount().encode(data["amount"] if "amount" in data else None)
+                )
+        except:
+            pass
         return "931{ss}".format(
             ss = self.Amount().encode(data["amount"] if "amount" in data else None)
         )
