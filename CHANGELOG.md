@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## 0.1.6 [XXXX-XX-XX]
+## 0.1.6 [2023-12-23]
 
 ### Fixed
 
