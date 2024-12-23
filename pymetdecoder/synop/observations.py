@@ -9,6 +9,8 @@
 #   * Merged from individual section scripts
 # TDBA 2023-04-21:
 #   * Fixed erroneous error message for temperatures (#10)
+# TDBA 2024-10-15:
+#   * Fixed incorrect handling of pressures > 1050 hPa (#16)
 ################################################################################
 # CONFIGURATION
 ################################################################################
@@ -788,7 +790,7 @@ class Pressure(Observation):
     _CODE_LEN = 4
     _UNIT = "hPa"
     def _decode_convert(self, val, **kwargs):
-        return (int(val) / 10) + (0 if int(val) > 500 else 1000)
+        return (int(val) / 10) + (0 if int(val) > 5000 else 1000)
     def _encode_convert(self, val, **kwargs):
         return abs(val * 10) - (10000 if val >= 1000 else 0)
 class PressureChange(Observation):
