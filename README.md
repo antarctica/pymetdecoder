@@ -234,7 +234,7 @@ See `CHANGELOG.md` for the list of changes
 
 ## Known issues
 
-This version is 0.1.5. There may be some uncaught bugs/issues or other problems that have not been found yet. The following is a list of known issues which are still to be addressed:
+This version is 0.1.6. There may be some uncaught bugs/issues or other problems that have not been found yet. The following is a list of known issues which are still to be addressed:
 
 * Not all countries are auto-detected. As more region-specific handling is added, more countries will be added to the list
 * Section 5 of the SYNOP messages are not handled yet. Any codes in these sections are stored in the output dict under the `section5` attribute
@@ -257,6 +257,6 @@ If you would like to contribute to this module by adding in the functionality to
 
 ## License
 
-(c) UK Research and Innovation (UKRI), 2021 - 2023, British Antarctic Survey.
+(c) UK Research and Innovation (UKRI), 2021 - 2024, British Antarctic Survey.
 You may use and re-use this software and associated documentation files free of charge in any format or medium, under the terms of the Open Government Licence v3.0.
 You may obtain a copy of the Open Government Licence at http://www.nationalarchives.gov.uk/doc/open-government-licence/
