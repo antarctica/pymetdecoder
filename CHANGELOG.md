@@ -1,10 +1,11 @@
 # CHANGELOG
 
-## Next [XXXX-XX-XX]
+## 0.1.6 [XXXX-XX-XX]
 
 ### Fixed
 
 * (#11) - 0xxxx group handling in section 3 now extended to other regions
+* (#12) - Table 4077 codes above 66 no longer labelled as invalid
 * Synops now jump to Section 5 even if it follows directly after Section 1 or 2
 * (#14) - Fixed erroneous elevation units for elevation quality mark
 * (#15) - Fixed erroneous weather tables
