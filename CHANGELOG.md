@@ -1,11 +1,20 @@
 # CHANGELOG
 
-## Next [XXXX-XX-XX]
+## 0.1.6 [2023-12-23]
 
 ### Fixed
 
 * (#11) - 0xxxx group handling in section 3 now extended to other regions
+* (#12) - Table 4077 codes above 66 no longer labelled as invalid
 * Synops now jump to Section 5 even if it follows directly after Section 1 or 2
+* (#14) - Fixed erroneous elevation units for elevation quality mark
+* (#15) - Fixed erroneous weather tables
+
+## 0.1.5 [2024-10-16]
+
+### Fixed
+
+* (#16) - Pressures > 1050 hPa are now handled correctly
 
 ## 0.1.4 [2023-04-21]
 

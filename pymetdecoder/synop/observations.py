@@ -9,6 +9,8 @@
 #   * Merged from individual section scripts
 # TDBA 2023-04-21:
 #   * Fixed erroneous error message for temperatures (#10)
+# TDBA 2024-10-15:
+#   * Fixed incorrect handling of pressures > 1050 hPa (#16)
 ################################################################################
 # CONFIGURATION
 ################################################################################
@@ -574,10 +576,12 @@ class ImportantWeather(Observation):
     _CODE_LEN = 2
     def _decode(self, raw, **kwargs):
         use_4687 = kwargs.get("use_4687", False)
+        ix = kwargs.get("weather_indicator")
+        table = "4680" if ix in [5, 6, 7] else "4677"
         if use_4687:
             return ct.CodeTable4687().decode(raw, **kwargs)
         else:
-            return { "value": int(raw), "_table": "4677", "time_before_obs": kwargs.get("time_before") }
+            return { "value": int(raw), "_table": table, "time_before_obs": kwargs.get("time_before") }
 class LocalPrecipitation(Observation):
     """
     Precipitation character and time of precipitation for Region I
@@ -786,7 +790,7 @@ class Pressure(Observation):
     _CODE_LEN = 4
     _UNIT = "hPa"
     def _decode_convert(self, val, **kwargs):
-        return (int(val) / 10) + (0 if int(val) > 500 else 1000)
+        return (int(val) / 10) + (0 if int(val) > 5000 else 1000)
     def _encode_convert(self, val, **kwargs):
         return abs(val * 10) - (10000 if val >= 1000 else 0)
 class PressureChange(Observation):
@@ -1081,6 +1085,14 @@ class SnowFall(Observation):
             data["time_before_obs"] = time_before
         return data
     def _encode(self, data, **kwargs):
+        try:
+            if data["time_before_obs"]["_table"] == "4077":
+                return "907{tt} 931{ss}".format(
+                    tt = TimeBeforeObs().encode(data["time_before_obs"]),
+                    ss = self.Amount().encode(data["amount"] if "amount" in data else None)
+                )
+        except:
+            pass
         return "931{ss}".format(
             ss = self.Amount().encode(data["amount"] if "amount" in data else None)
         )
@@ -1159,7 +1171,7 @@ class StationPosition(Observation):
 
             # Decode values
             data["marsden_square"] = self.MarsdenSquare().decode(MMM)
-            data["elevation"] = self.Elevation().decode(hhhh, unit="m" if int(im) < 4 else "ft")
+            data["elevation"] = self.Elevation().decode(hhhh, unit="m" if int(im) <= 4 else "ft")
             data["confidence"] = self.Confidence().decode(im)
 
         # Return data
@@ -1254,6 +1266,8 @@ class StationPosition(Observation):
         def _encode(self, data, **kwargs):
             elevation = kwargs.get("elevation")
             confidence = self._CONFIDENCE.index(data)
+            if confidence == 0:
+                confidence = 4
             if "unit" not in elevation:
                 raise EncodeError("No units specified for elevation")
             if elevation["unit"] not in ["m", "ft"]:
@@ -1572,10 +1586,13 @@ class Weather(Observation):
     def _decode(self, group, **kwargs):
         time_before = kwargs.get("time_before")
         w_type = kwargs.get("type")
+        ix = kwargs.get("weather_indicator")
         if w_type == "present":
-            table = "4677"
+            table = "4680" if ix in [5, 6, 7] else "4677"
+            # table = "4677" if ix in [None, 1, 2, 3, 4] else "4680"
         elif w_type == "past":
-            table = "4561"
+            table = "4531" if ix in [5, 6, 7] else "4561"
+            # table = "4561" if ix in [None, 1, 2, 3, 4] else "4531"
         else:
             raise ValueError("{} is not a valid weather type".format(w_type))
 

@@ -255,6 +255,45 @@ class TestSynopOOXX(BaseTestSynop):
             "minute": { "value":  0 }
         }
     }
+class TestSynopOOXXElevation(BaseTestSynop):
+    """
+    Tests a simple OOXX synop with elevation
+    """
+    SYNOP = "OOXX BHO 05194 99210 10799 10119 02524 26/// /3001"
+    expected = {
+        "station_type": { "value": "OOXX" },
+        "callsign": { "value": "BHO" },
+        "obs_time": {
+            "day":  { "value": 5 },
+            "hour": { "value": 19 }
+        },
+        "wind_indicator": {
+            "value": 4, "unit": "KT", "estimated": False
+        },
+        "station_position": {
+            "latitude": 21.0,
+            "longitude": 79.9,
+            "marsden_square": 101,
+            "elevation": {
+                "value": 252,
+                "unit": "m"
+            },
+            "confidence": "Poor"
+        },
+        "precipitation_indicator": {
+            "value": 2, "in_group_1": False, "in_group_3": True
+        },
+        "weather_indicator": {
+            "value": 6, "automatic": True
+        },
+        "lowest_cloud_base": None,
+        "visibility": None,
+        "cloud_cover": None,
+        "surface_wind": {
+            "direction": { "_table": "0877", "value": 300, "varAllUnknown": False, "calm": False, "_code": 30, "unit": "deg" },
+            "speed": { "value": 1, "unit": "KT" }
+        }
+    }
 class TestSynopAAXXAntarctic(BaseTestSynop):
     """
     Tests a AAXX synop with Antarctic specific options (plus some additional options
@@ -692,12 +731,12 @@ class TestSynopAAXX9Groups96(BaseTestSynop):
     TEST_ATTRS = ["present_weather_additional", "important_weather"]
     expected = {
         "present_weather_additional": [{
-            "_table": "4677", "value": 10, "time_before_obs": { "value": 3, "unit": "h" }
+            "_table": "4680", "value": 10, "time_before_obs": { "value": 3, "unit": "h" }
         },{
-            "_table": "4677", "value": 20, "time_before_obs": { "value": 3, "unit": "h" }
+            "_table": "4680", "value": 20, "time_before_obs": { "value": 3, "unit": "h" }
         }],
         "important_weather": [
-            { "_table": "4677", "value": 47, "time_before_obs": { "value": 3, "unit": "h" }},
+            { "_table": "4680", "value": 47, "time_before_obs": { "value": 3, "unit": "h" }},
             { "_table": "4687", "value": 10, "time_before_obs": { "value": 3, "unit": "h" }}
         ]
     }
@@ -945,6 +984,60 @@ class TestSynopAAXXSection5AfterSection1(BaseTestSynop):
         },
         'section5': ['3//32', '84619']
     }
+class TestSynopAAXXWeatherCorrectTablesAuto(BaseTestSynop):
+    """
+    Tests that present and past weather are using the correct tables (automatic)
+    """
+    SYNOP = "AAXX 21121 15001 07415 32931 10103 21090 39765 42250 57020 60071 72006"
+    TEST_ATTRS = ["present_weather", "past_weather"]
+    expected = {
+        "present_weather": {
+            "value": 20,
+            "_table": "4680",
+            "time_before_obs": {
+                "value": 6,
+                "unit": "h"
+            }
+        },
+        "past_weather": [
+            { "value": 0, "_table": "4531" },
+            { "value": 6, "_table": "4531" }
+        ]
+    }
+class TestSynopAAXXWeatherCorrectTablesManual(BaseTestSynop):
+    """
+    Tests that present and past weather are using the correct tables (manual)
+    """
+    SYNOP = "AAXX 21121 15001 01415 32931 10103 21090 39765 42250 57020 60071 72006"
+    TEST_ATTRS = ["present_weather", "past_weather"]
+    expected = {
+        "present_weather": {
+            "value": 20,
+            "_table": "4677",
+            "time_before_obs": {
+                "value": 6,
+                "unit": "h"
+            }
+        },
+        "past_weather": [
+            { "value": 0, "_table": "4561" },
+            { "value": 6, "_table": "4561" }
+        ]
+    }
+class TestSynopAAXXTable4077(BaseTestSynop):
+    """
+    Tests the higher time periods in table 4077 resolve correctly
+    """
+    SYNOP = "AAXX 25061 40729 12960 11101 333 90767 93120"
+    TEST_ATTRS = ["snow_fall"]
+    expected = {
+        "snow_fall": {
+            "amount": { "_table": "3870", "value": 200, "quantifier": None, "inaccurate": False, "_code": 20, "unit": "mm" },
+            # "time_before_obs": { "min": 18, "max": None, "quantifier": "isGreater", "unit": "h" }
+            "time_before_obs": { "_table": "4077", "min": 12, "max": 18, "quantifier": None, "_code": 67, "unit": "h" }            
+        }
+    }
+
 class TestSynopException:
     """
     Tests the various exceptions
@@ -958,3 +1051,12 @@ class TestSynopException:
     def test_encode_exception(self):
         with pytest.raises(EncodeError):
             encoded = s.SYNOP().encode(self.data)
+class TestSynopAAXXHighPressure(BaseTestSynop):
+    """
+    Tests a AAXX synop with a pressure > 1050 hPa
+    """
+    SYNOP = "AAXX 09004 08495 11459 30714 10147 20136 30567"
+    TEST_ATTRS = ["station_pressure"]
+    expected = {
+        "station_pressure": { "value": 1056.7, "unit": "hPa" }
+    }
