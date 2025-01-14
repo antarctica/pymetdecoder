@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## Next version [XXXX-XX-XX]
+
+### Added
+
+* Can now encode/decode reports directly from the command line
+
+### Changed
+
+* Migrated to Poetry for packaging
+
 ## 0.1.6 [2023-12-23]
 
 ### Fixed
