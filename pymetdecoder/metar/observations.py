@@ -8,7 +8,8 @@
 ################################################################################
 # CONFIGURATION
 ################################################################################
-import re
+import re, math
+from fractions import Fraction
 from pymetdecoder import Observation, logging, DecodeError, EncodeError, InvalidCode
 from pymetdecoder import code_tables as ct
 
@@ -79,7 +80,7 @@ class CloudAmountHeight(Observation):
         clouds = []
         for d in data:
             NNN = self.Amount().encode(d["amount"] if "amount" in d else None, allow_none=True)
-            if NNN not in ["NSC", "NCD", "SKC"]:
+            if NNN not in ["NSC", "NCD", "SKC", "CLR"]:
                 hhh = self.Height().encode(d["height"] if "height" in d else None, allow_none=True)
                 clouds.append("{NNN}{hhh}{cu}".format(
                     NNN = NNN,
@@ -93,13 +94,15 @@ class CloudAmountHeight(Observation):
         """
         Cloud amount
         """
-        _VALID_VALUES = ["NSC", "NCD", "SKC", "FEW", "SCT", "BKN", "OVC"]
+        _VALID_VALUES = ["NSC", "NCD", "CLR", "SKC", "FEW", "SCT", "BKN", "OVC"]
         _VALID_RANGE = (0, 8)
         def _decode(self, NNN):
             if NNN == "NSC":
                 return { "value": None, "clouds_detected": True }
             elif NNN == "NCD":
-                return { "value": None, "clouds_detected": False },
+                return { "value": None, "clouds_detected": False }
+            elif NNN == "CLR":
+                return { "value": 0, "unit": "okta", "clouds_detected": False  }
             elif NNN == "SKC":
                 return { "value": 0, "unit": "okta", "clouds_detected": True  }
             elif NNN == "FEW":
@@ -113,12 +116,17 @@ class CloudAmountHeight(Observation):
             else:
                 raise InvalidCode(NNN, "cloud amount")
         def _encode(self, data, **kwargs):
+            if "clouds_detected" in data:
+                detected = data["clouds_detected"]
+            else:
+                detected = False if data["value"] is None else True
+
             if data["value"] is None:
-                return "NSC" if data["clouds_detected"] else "NCD"
+                return "NSC" if detected else "NCD"
 
             if isinstance(data["value"], int):
                 if data["value"] == 0:
-                    return "SKC"
+                    return "SKC" if detected else "CLR"
                 elif 1 <= data["value"] <= 2:
                     return "FEW"
                 elif 3 <= data["value"] <= 4:
@@ -338,7 +346,7 @@ class RunwayVisual(Observation):
     def _decode(self, rvr):
         # (runway, vis) = rvr.split("/")
         try:
-            groups = re.match(r"^R((0?[1-9]|[1-2]\d|3[0-6])[LCR]?)\/([PM]?)(\d{4}|\/{4})([UDN]?)(V([PM]?)(\d{4}|\/{4})([UDN]?))?$", rvr).groups()
+            groups = re.match(r"^R((0?[1-9]|[1-2]\d|3[0-6])[LCR]?)\/([PM]?)(\d{4}|\/{4})([UDN]?|FT)(V([PM]?)(\d{4}|\/{4})([UDN]?|FT))?$", rvr).groups()
             # (RR, extreme_1, vis_1, tendency_1, variation, extreme_2, vis_2, tendency_2) = groups
             # print(groups)
             # (RR, extreme, vis, tendency) = re.match(r"^R(\d{2})\/([PM]?)(\d{4}|\/{4})([UDN]?)$", rvr).groups()
@@ -397,16 +405,17 @@ class RunwayVisual(Observation):
             return data
         def _decode(self, vis):
             # If there's no extreme, tendency or variation, then it's a normal visibility
-            if vis[3] is None and vis[0] == "" and vis[2] == "":
-                return Visibility().decode(vis[1]) 
+            if vis[3] is None and vis[0] == "" and (vis[2] == "" or vis[2] == "FT"):
+                return Visibility().decode("{}{}".format(vis[1], vis[2]))
 
             if vis[3] is None:
                 data = {
                     "value": int(vis[1]),
-                    "unit": self._UNIT
+                    "unit": self._UNIT if vis[2] != "FT" else "[ft_us]"
                 }
                 data = self._get_extreme(data, vis[0])
-                data = self._get_tendency(data, vis[2])
+                if vis[2] != "FT":
+                    data = self._get_tendency(data, vis[2]) 
             else:
                 data = {
                     "variation": {
@@ -429,7 +438,10 @@ class RunwayVisual(Observation):
                     pass
                 output += "{:04d}".format(data["value"])
                 try:
-                    output += [x for x in self._TENDENCIES if self._TENDENCIES[x] == data["tendency"]][0]
+                    if data["unit"] == "[ft_us]":
+                        output += "FT"
+                    else:
+                        output += [x for x in self._TENDENCIES if self._TENDENCIES[x] == data["tendency"]][0]
                 except:
                     pass
             else:
@@ -529,13 +541,13 @@ class SurfaceWind(Observation):
                 dn = "{:03d}".format(data["from"]),
                 dx = "{:03d}".format(data["to"])
             )
-class Temperature(Observation):
-    """
-    Temperature
+# class Temperature(Observation):
+#     """
+#     Temperature
 
-    * T'T'/Td'Td' - air temperature and dew point temperature
-    """
-    _CODE_LEN = 5
+#     * T'T'/Td'Td' - air temperature and dew point temperature
+#     """
+#     _CODE_LEN = 5
     # def _decode(self, data):
     #     try:
     #         (Ts, TT, Tds, Td) = re.match(r"^(M)?(\d{2}|\/\/)\/(M)?(\d{2}|\/\/)", data).groups()
@@ -644,10 +656,21 @@ class Visibility(Observation):
     def _decode(self, data):
         try:
             if data.endswith("SM"):
-                value = int(data[0:-2])
+                # Distances in SM can be specified as fractions
+                if "/" in data[0:-2]:
+                    value = float(Fraction(data[0:-2]))
+                else:
+                    value = int(data[0:-2])
                 return {
                     "value": value,
                     "unit": "[mi_us]",
+                    "direction": None
+                }
+            elif data.endswith("FT"):
+                # Visiblity measured in feet
+                return {
+                    "value": int(data[0:-2]),
+                    "unit": "[ft_us]",
                     "direction": None
                 }
             else:
@@ -696,6 +719,39 @@ class Visibility(Observation):
                 d = data["direction"] if data["direction"] is not None else ""
             )
         elif data["unit"] == "[mi_us]":
+            # Round according to 15.6.4 for US
+            v = float(data["value"])
+            if 0 <= v < 0.375:
+                denom = 16
+                frac  = True
+            elif 0.375 <= v < 2:
+                denom = 8
+                frac  = True
+            elif 2 <= v < 3:
+                denom = 4
+                frac  = True
+            elif 3 <= v < 15:
+                denom = 1
+                frac  = False
+            elif v >= 15:
+                denom = 0.2
+                frac  = False
+            vis = (math.floor(v * denom)) / denom
+            if frac:
+                vis = Fraction(vis)
+            else:
+                vis = int(vis)
+
             return "{VVVV}SM".format(
-                VVVV = data["value"]
+                VVVV = vis
             )
+        elif data["unit"] == "[ft_us]":
+            # According to 15.7.2 for US, only report between 1000 and 6000
+            if 0 <= data["value"] < 1000:
+                return "1000FT"
+            elif 1000 <= data["value"] < 6000:
+                return "{VVVV}FT".format(
+                    VVVV = data["value"]
+                )
+            elif data["value"] >= 6000:
+                return "6000FT"

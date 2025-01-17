@@ -118,7 +118,7 @@ class TestComplexMetar(BaseTestMetar):
     present weather, visibility variation, no significant clouds (NSC) and 
     temperatures around 0 Cel
     """
-    METAR = "METAR SBRB 080200Z 00000KT 7000 2000NW R24///// R06L/P2000 R22/1100VP2000U -RA FU NSC 00/M00 Q0987"
+    METAR = "METAR SBRB 080200Z 00000KT 7000 2000NW R24///// R06L/P2000 R22/1100VP2000U R28/2400FT R27/P6000FT -RA FU NSC 00/M00 Q0987"
     expected = {
         "is_special": False,
         "callsign": { "value": "SBRB" },
@@ -150,6 +150,12 @@ class TestComplexMetar(BaseTestMetar):
                     "max": { "value": 2000, "unit": "m", "quantifier": "isGreaterOrEqual", "tendency": "up" }
                 }
             }
+        },{
+            "runway": { "value": "28" },
+            "visibility": { "value": 2400, "unit": "[ft_us]", "direction": None }
+        },{
+            "runway": { "value": "27" },
+            "visibility": { "value": 6000, "unit": "[ft_us]", "quantifier": "isGreaterOrEqual" }
         }],
         "present_weather": [
             { "_table": "4678", "intensity": "light", "precipitation": ["rain"] },
@@ -400,4 +406,58 @@ class TestVerticalVisibility(BaseTestMetar):
         "dewpoint_temperature": { "value": 12, "unit": "Cel", "min": 11.5, "max": 12.5 },
         "qnh": { "value": 1016, "unit": "hPa" }
     }
-   
+class TestImperialMeasurements(BaseTestMetar):
+    """
+    Tests imperial measurements (e.g. values in SM/FT) are handled correctly
+    """
+    METAR = "METAR KGNV 201953Z 24015KT 3/4SM +TSRA BKN008 OVC015CB 26/25 A2985 RMK TSB32RAB32"
+    TEST_ATTRS = ["prevailing_visibility"]
+    expected = {
+        # "is_special": False,
+        # "callsign": { "value": "KGNV" },
+        # "obs_time": {
+        #     "day":    { "value": 20 },
+        #     "hour":   { "value": 19 },
+        #     "minute": { "value": 53 }
+        # },
+        # "is_automatic": False,
+        # "surface_wind": {
+        #     "direction": { "value": 120, "unit": "deg", "variable": False },
+        #     "speed": { "value": 3, "unit": "KT" },
+        #     "gust": None,
+        #     "variation": None
+        # },
+        "prevailing_visibility": { "value": 0.75, "unit": "[mi_us]", "direction": None } 
+    }
+class TestClearSky(BaseTestMetar):
+    """
+    Tests CLR is decoded/encoded correctly
+    """
+    METAR = "METAR KMCI 171153Z 20016KT 10SM CLR 04/M03 A2969 RMK AO2 SLP059 4/003 T00441033 10061 20000 56031"
+    expected = {
+        "is_special": False,
+        "callsign": { "value": "KMCI" },
+        "obs_time": {
+            "day":    { "value": 17 },
+            "hour":   { "value": 11 },
+            "minute": { "value": 53 }            
+        },
+        "is_automatic": False,
+        "surface_wind": {
+            "direction": { "value": 200, "unit": "deg", "variable": False },
+            "speed": { "value": 16, "unit": "KT" },
+            "gust": None,
+            "variation": None         
+        },
+        "prevailing_visibility": { "value": 10, "unit": "[mi_us]", "direction": None },
+        "cloud_types": [{ 
+            "amount": { "value": 0, "unit": "okta", "clouds_detected": False },
+            "height": None,
+            "convective": { "cumulonimbus": False, "towering_cumulus": False, "not_observable": False }
+        }],
+        "air_temperature": { "value": 4, "unit": "Cel", "min": 3.5, "max": 4.5 },
+        "dewpoint_temperature": { "value": -3, "unit": "Cel", "min": -3.5, "max": -2.5 },
+        "qnh": { "value": 29.69, "unit": "inHg" },
+        "remarks": "AO2 SLP059 4/003 T00441033 10061 20000 56031"
+    }
+  

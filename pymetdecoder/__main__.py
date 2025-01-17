@@ -5,26 +5,31 @@
 #
 # TDBA 2025-01-08
 #   * First version
+# TDBA 2025-01-15:
+#   * Added METAR
 ################################################################################
 # CONFIGURATION
 ################################################################################
 import sys, argparse, json
-from pymetdecoder import synop
+from pymetdecoder import synop, metar
 
-REPORT_TYPES = [("synop", "SYNOP", synop)]
+REPORT_TYPES = [
+    ("synop", "SYNOP", synop),
+    ("metar", "METAR", metar)
+]
 
 # Setup command line arguments
 parser = argparse.ArgumentParser()
 subparsers = parser.add_subparsers(help="Action to take")
 subparser_decode = subparsers.add_parser("decode", help="Decode reports")
 subparser_encode = subparsers.add_parser("encode", help="Encode reports")
+subparser_decode.add_argument("--include-original", "-o", action="store_true",
+    help="Include the original message in the output")
 for r in REPORT_TYPES:
-    subparser_decode.add_argument("--{}".format(r[0]), action="append", dest="d_{}".format(r[0]),
-        help="{} reports to decode. Use '-' to read from standard input".format(r[1]))
-    subparser_decode.add_argument("--include-original", "-o", action="store_true",
-        help="Include the original message in the output")
-    subparser_encode.add_argument("--{}".format(r[0]), action="append", dest="e_{}".format(r[0]),
-        help="{} reports to encode. Use '-' to read from standard input".format(r[1]))
+    subparser_decode.add_argument("--{}".format(r[0]), dest="d_{}".format(r[0]),
+        nargs="*", metavar=r[1], help="{} reports to decode. Use '-' to read from standard input".format(r[1]))
+    subparser_encode.add_argument("--{}".format(r[0]), dest="e_{}".format(r[0]), 
+        nargs="*", metavar=r[1], help="{} reports to encode. Use '-' to read from standard input".format(r[1]))
 ################################################################################
 # MAIN
 ################################################################################
@@ -39,7 +44,7 @@ if __name__ == "__main__":
         
         # Decode
         _d_var = "d_{}".format(r[0])
-        if hasattr(args, _d_var):
+        if hasattr(args, _d_var) and getattr(args, _d_var) is not None:
             if r[0] not in result:
                 result[r[0]] = { "decoded": [] }
                 if args.include_original:
@@ -61,7 +66,7 @@ if __name__ == "__main__":
     
         # Encode
         _e_var = "e_{}".format(r[0])
-        if hasattr(args, _e_var):
+        if hasattr(args, _e_var) and getattr(args, _e_var) is not None:
             if r[0] not in result:
                 result[r[0]] = {}
 
@@ -76,4 +81,4 @@ if __name__ == "__main__":
                     print("ERROR: {}".format(str(e)))
 
     # Print the result
-    print(result)
+    print(json.dumps(result))

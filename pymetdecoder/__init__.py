@@ -117,7 +117,7 @@ class Observation(object):
             # logging.warning(str(e))
             raise DecodeError(str(e))
         except Exception as e:
-            # logging.warning(str(e))
+            logging.warning(str(e))
             raise DecodeError("Unable to decode group {}".format(raw))
     def encode(self, raw, **kwargs):
         """

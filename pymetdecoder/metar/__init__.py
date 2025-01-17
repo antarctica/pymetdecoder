@@ -103,7 +103,7 @@ class METAR(pymetdecoder.Report):
                 grp = next(groups)
             else:
                 while True:
-                    if re.match(r"^[0-9R]", grp):
+                    if re.match(r"^([0-9]|R[012])", grp):
                         vis_groups.append(grp)
                         grp = next(groups)
                     else:
