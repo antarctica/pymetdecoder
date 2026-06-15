@@ -1217,7 +1217,7 @@ class CodeTable4678(CodeTable):
         except:
             codes.append("")
         codes += re.findall("..", ww[len(codes[0]):])
-        
+
         data = {}
         for c in codes:
             found = False
@@ -1225,7 +1225,7 @@ class CodeTable4678(CodeTable):
                 if found:
                     break
                 if c in table:
-                    if t in ["obscuration", "other"] and "intensity" in data:
+                    if t in ["obscuration", "other"] and "intensity" in data and data["intensity"] != "in vicinity":
                         del(data["intensity"])
                     if t in ["precipitation"]:
                         if t not in data:
@@ -1236,16 +1236,7 @@ class CodeTable4678(CodeTable):
                     found = True
             if not found:
                 raise ValueError(ww)
-                # if found:
-                #     continue
-                # for k, v in table.items():
-                #     if k == c:
-                #         data[t] = v
-                #         found = True
         return data
-        # print(ww)
-        # table = self._LOOKUP[kwargs.get("val_type")]
-        # return { "value": table[ww] }
     def _encode(self, data):
         val = []
         for t, table in self._LOOKUP.items():
@@ -1254,10 +1245,11 @@ class CodeTable4678(CodeTable):
                     vals = [data[t]]
                 else:
                     vals = data[t]
-                for k, v in table.items():
-                    if v in vals:
-                        val.append(k)
-
+                for x in vals:
+                    if x is None:
+                        continue
+                    idx = list(table.values()).index(x)
+                    val.append(list(table.keys())[idx])
         return "".join(val)
 class CodeTable4687(CodeTable):
     """

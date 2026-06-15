@@ -36,11 +36,11 @@ class BaseTestMetar:
             assert False, "Extra attribute '{}' found in decoded output".format(attr)
         else:
             assert decoded[attr] == self.expected[attr], "Decoded attribute '{}' does not match expected output".format(attr)
-        
+
     def test_reencode(self, decoded):
         encoded = m.METAR().encode(decoded)
         assert encoded == self.METAR, "Re-encoded METAR does not match original"
-    
+
     def test_expected(self, decoded):
         for k in self.expected:
             if k not in decoded:
@@ -65,7 +65,7 @@ class TestSimpleMetar(BaseTestMetar):
             "gust": None,
             "variation": None
         },
-        "prevailing_visibility": { "value": 10000, "unit": "m", "quantifier": "isGreaterThan", "direction": None },
+        "prevailing_visibility": { "value": 10000, "unit": "m", "quantifier": "isGreaterThan", "direction": None, "no_directional_variation": False },
         "cloud_types": [{
             "amount": { "value": "FEW", "min": 1, "max": 2, "unit": "okta", "clouds_detected": True },
             "height": { "_table": "1690", "value": 900, "quantifier": None, "_code": 30, "unit": "m" },
@@ -102,7 +102,7 @@ class TestSpeci(BaseTestMetar):
             "gust": None,
             "variation": None
         },
-        "prevailing_visibility": { "value": 10000, "unit": "m", "quantifier": "isGreaterThan", "direction": None },
+        "prevailing_visibility": { "value": 10000, "unit": "m", "quantifier": "isGreaterThan", "direction": None, "no_directional_variation": False },
         "cloud_types": [{
             "amount": { "value": "FEW", "min": 1, "max": 2, "unit": "okta", "clouds_detected": True },
             "height": { "_table": "1690", "value": 360, "quantifier": None, "_code": 12, "unit": "m" },
@@ -114,8 +114,8 @@ class TestSpeci(BaseTestMetar):
     }
 class TestComplexMetar(BaseTestMetar):
     """
-    Tests complex functionality in a METAR including runway visual range (RVR), 
-    present weather, visibility variation, no significant clouds (NSC) and 
+    Tests complex functionality in a METAR including runway visual range (RVR),
+    present weather, visibility variation, no significant clouds (NSC) and
     temperatures around 0 Cel
     """
     METAR = "METAR SBRB 080200Z 00000KT 7000 2000NW R24///// R06L/P2000 R22/1100VP2000U R28/2400FT R27/P6000FT -RA FU NSC 00/M00 Q0987"
@@ -134,25 +134,25 @@ class TestComplexMetar(BaseTestMetar):
             "gust": None,
             "variation": None
         },
-        "prevailing_visibility": { "value": 7000, "min": 7000, "max": 8000, "unit": "m", "direction": None },
-        "visibility_variation":  { "value": 2000, "min": 2000, "max": 2100, "unit": "m", "direction": "NW" },
+        "prevailing_visibility": { "value": 7000, "min": 7000, "max": 8000, "unit": "m", "direction": None, "no_directional_variation": False },
+        "visibility_variation":  { "value": 2000, "min": 2000, "max": 2100, "unit": "m", "direction": "NW", "no_directional_variation": False },
         "runway_visual_range": [{
             "runway": { "value": "24" },
             "visibility": None
         },{
             "runway": { "value": "06L" },
-            "visibility": { "value": 2000, "unit": "m", "quantifier": "isGreaterOrEqual" }
+            "visibility": { "value": 2000, "unit": "m", "quantifier": "isGreaterOrEqual", }
         },{
             "runway": { "value": "22" },
-            "visibility": { 
-                "variation": { 
+            "visibility": {
+                "variation": {
                     "min": { "value": 1100, "unit": "m" },
                     "max": { "value": 2000, "unit": "m", "quantifier": "isGreaterOrEqual", "tendency": "up" }
                 }
             }
         },{
             "runway": { "value": "28" },
-            "visibility": { "value": 2400, "unit": "[ft_us]", "direction": None }
+            "visibility": { "value": 2400, "unit": "[ft_us]", "direction": None, "no_directional_variation": False }
         },{
             "runway": { "value": "27" },
             "visibility": { "value": 6000, "unit": "[ft_us]", "quantifier": "isGreaterOrEqual" }
@@ -161,7 +161,7 @@ class TestComplexMetar(BaseTestMetar):
             { "_table": "4678", "intensity": "light", "precipitation": ["rain"] },
             { "_table": "4678", "obscuration": "smoke" }
         ],
-        "cloud_types": [{ 
+        "cloud_types": [{
             "amount": { "value": None, "clouds_detected": True },
             "height": None,
             "convective": { "cumulonimbus": False, "towering_cumulus": False, "not_observable": False }
@@ -175,7 +175,7 @@ class TestCORAtStart(BaseTestMetar):
     Tests METAR is decoded successfully if COR is at the start
     """
     METAR = "METAR COR SMJP 082200Z 14002KT 9999 FEW018 32/23 Q1010"
-    expected = { 
+    expected = {
         "is_special": False,
         "is_corrected": True,
         "callsign": { "value": "SMJP" },
@@ -191,7 +191,7 @@ class TestCORAtStart(BaseTestMetar):
             "gust": None,
             "variation": None
         },
-        "prevailing_visibility": { "value": 10000, "unit": "m", "quantifier": "isGreaterThan", "direction": None },
+        "prevailing_visibility": { "value": 10000, "unit": "m", "quantifier": "isGreaterThan", "direction": None, "no_directional_variation": False },
         "cloud_types": [{
             "amount": { "value": "FEW", "min": 1, "max": 2, "unit": "okta", "clouds_detected": True },
             "height": { "_table": "1690", "value": 540, "quantifier": None, "_code": 18, "unit": "m" },
@@ -203,7 +203,7 @@ class TestCORAtStart(BaseTestMetar):
     }
 class TestCORInMiddle(TestCORAtStart):
     """
-    Tests METAR is decoded successfully if COR is later on in the METAR. Note, 
+    Tests METAR is decoded successfully if COR is later on in the METAR. Note,
     when re-encoding, this will put COR at the start, which the documentation
     implies is the correct way. Therefore, we compare a different result for re-encoding
     """
@@ -299,7 +299,7 @@ class TestTrendsTEMPO(BaseTrendsTest):
             "gust": None,
             "variation": None
         },
-        "visibility": { "value": 6000, "unit": "m", "min": 6000, "max": 7000, "direction": None },
+        "visibility": { "value": 6000, "unit": "m", "min": 6000, "max": 7000, "direction": None, "no_directional_variation": False },
         "present_weather": [
             { "_table": "4678", "intensity": "light", "precipitation": ["rain", "snow"], "descriptor": "shower(s)" }
         ],
@@ -348,7 +348,7 @@ class TestNonStandardMetar(BaseTestMetar):
             "gust": None,
             "variation": None
         },
-        "prevailing_visibility": { "value": 5, "unit": "[mi_us]", "direction": None },
+        "prevailing_visibility": { "value": 5, "unit": "[mi_us]", "direction": None, "no_directional_variation": False },
         "cloud_types": [{
             "amount": { "value": "FEW", "min": 1, "max": 2, "unit": "okta", "clouds_detected": True },
             "height": { "_table": "1690", "value": 510, "quantifier": None, "_code": 17, "unit": "m" },
@@ -384,7 +384,7 @@ class TestVerticalVisibility(BaseTestMetar):
             "gust": None,
             "variation": None
         },
-        "prevailing_visibility": { "value": 300, "min": 300, "max": 350, "unit": "m", "direction": None },
+        "prevailing_visibility": { "value": 300, "min": 300, "max": 350, "unit": "m", "direction": None, "no_directional_variation": False },
         "runway_visual_range": [{
             "runway": { "value": "12" },
             "visibility": { "value": 400, "unit": "m", "tendency": "none" }
@@ -427,7 +427,7 @@ class TestImperialMeasurements(BaseTestMetar):
         #     "gust": None,
         #     "variation": None
         # },
-        "prevailing_visibility": { "value": 0.75, "unit": "[mi_us]", "direction": None } 
+        "prevailing_visibility": { "value": 0.75, "unit": "[mi_us]", "direction": None, "no_directional_variation": False }
     }
 class TestClearSky(BaseTestMetar):
     """
@@ -440,17 +440,17 @@ class TestClearSky(BaseTestMetar):
         "obs_time": {
             "day":    { "value": 17 },
             "hour":   { "value": 11 },
-            "minute": { "value": 53 }            
+            "minute": { "value": 53 }
         },
         "is_automatic": False,
         "surface_wind": {
             "direction": { "value": 200, "unit": "deg", "variable": False },
             "speed": { "value": 16, "unit": "KT" },
             "gust": None,
-            "variation": None         
+            "variation": None
         },
-        "prevailing_visibility": { "value": 10, "unit": "[mi_us]", "direction": None },
-        "cloud_types": [{ 
+        "prevailing_visibility": { "value": 10, "unit": "[mi_us]", "direction": None, "no_directional_variation": False },
+        "cloud_types": [{
             "amount": { "value": 0, "unit": "okta", "clouds_detected": False },
             "height": None,
             "convective": { "cumulonimbus": False, "towering_cumulus": False, "not_observable": False }
@@ -460,4 +460,88 @@ class TestClearSky(BaseTestMetar):
         "qnh": { "value": 29.69, "unit": "inHg" },
         "remarks": "AO2 SLP059 4/003 T00441033 10061 20000 56031"
     }
-  
+class TestSeaState(BaseTestMetar):
+    """
+    Tests sea surface temperature and sea state are decoded correctly
+    """
+    METAR = "METAR ENGC 201320Z 21017KT 9999 SCT019 BKN040 07/03 Q1012 W07/S5"
+    expected = {
+        "is_special": False,
+        "callsign": { "value": "ENGC" },
+        "obs_time": {
+            "day":    { "value": 20 },
+            "hour":   { "value": 13 },
+            "minute": { "value": 20 }
+        },
+        "is_automatic": False,
+        "surface_wind": {
+            "direction": { "value": 210, "unit": "deg", "variable": False },
+            "speed": { "value": 17, "unit": "KT" },
+            "gust": None,
+            "variation": None
+        },
+        "prevailing_visibility": { "value": 10000, "unit": "m", "direction": None, "no_directional_variation": False, "quantifier": "isGreaterThan" },
+        "cloud_types": [{
+            "amount": { "value": "SCT", "min": 3, "max": 4, "unit": "okta", "clouds_detected": True },
+            "height": { "value": 570, "unit": "m", "_code": 19, "_table": "1690", "quantifier": None },
+            "convective": { "cumulonimbus": False, "towering_cumulus": False, "not_observable": False }
+        },{
+            "amount": { "value": "BKN", "min": 5, "max": 7, "unit": "okta", "clouds_detected": True },
+            "height": { "value": 1200, "unit": "m", "_code": 40, "_table": "1690", "quantifier": None },
+            "convective": { "cumulonimbus": False, "towering_cumulus": False, "not_observable": False }
+        }],
+        "air_temperature": { "value": 7, "unit": "Cel", "min": 6.5, "max": 7.5 },
+        "dewpoint_temperature": { "value": 3, "unit": "Cel", "min": 2.5, "max": 3.5 },
+        "qnh": { "value": 1012, "unit": "hPa" },
+        "sea_surface_temperature": { "value": 7, "unit": "Cel", "min": 6.5, "max": 7.5 },
+        "sea_state": { "value": "Rough", "_code": 5, "_table": "3700" }
+    }
+# class TestMissingVariables(BaseTestMetar):
+#     """
+#     Tests METARs with missing wind and visibility still encode and decode correctly
+#     """
+#     METAR = "SPECI KNKX 201339Z SCT028 08/06 A3007 RMK AO2 T00780056 $"
+#     expected = {
+#         "is_special": True,
+#         "callsign": { "value": "KNKX" },
+#         "obs_time": {
+#             "day":    { "value": 20 },
+#             "hour":   { "value": 13 },
+#             "minute": { "value": 39 }
+#         },
+#         "is_automatic": False,
+#         "cloud_types": [{
+#             "amount": { "value": "SCT", "min": 3, "max": 4, "unit": "okta", "clouds_detected": True },
+#             "height": { "value": 840, "unit": "m", "_code": 28, "_table": "1690", "quantifier": None },
+#             "convective": { "cumulonimbus": False, "towering_cumulus": False, "not_observable": False }
+#         }],
+#         "air_temperature": { "value": 8, "unit": "Cel", "min": 7.5, "max": 8.5 },
+#         "dewpoint_temperature": { "value": 6, "unit": "Cel", "min": 5.5, "max": 6.5 },
+#         "qnh": { "value": 30.07, "unit": "inHg" },
+#         "remarks": "AO2 T00780056 $"
+#     }
+class TestVariableWind(BaseTestMetar):
+    """
+    Tests variable winds are correctly decoded and encoded
+    """
+    METAR = "METAR LIMG 210950Z VRB02KT CAVOK 09/05 Q1019"
+    expected = {
+        "is_special": False,
+        "callsign": { "value": "LIMG" },
+        "obs_time": {
+            "day":    { "value": 21 },
+            "hour":   { "value": 9 },
+            "minute": { "value": 50 }
+        },
+        "is_automatic": False,
+        "surface_wind": {
+            "direction": { "value": None, "variable": True },
+            "speed": { "value": 2, "unit": "KT" },
+            "gust": None,
+            "variation": None
+        },
+        "cavok": True,
+        "air_temperature": { "value": 9, "unit": "Cel", "min": 8.5, "max": 9.5 },
+        "dewpoint_temperature": { "value": 5, "unit": "Cel", "min": 4.5, "max": 5.5 },
+        "qnh": { "value": 1019, "unit": "hPa" }
+    }

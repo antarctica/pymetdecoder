@@ -34,6 +34,11 @@ SECTIONS =  [
     ("qnh", obs.QNH, False, True),
     ("recent_weather", obs.RecentWeather, False, True),
     ("trend", obs.Trend, False, True),
+    [
+        ("sea_surface_temperature", obs.SeaSurfaceTemperature, False, True),
+        ("sea_state", obs.SeaState, False, True),
+        ("wave_height", obs.WaveHeight, False, True)
+    ],
     ("remarks", obs.Remarks, False, True)
 ]
 ################################################################################
@@ -46,7 +51,7 @@ class METAR(pymetdecoder.Report):
         """
         # Initialise groups to parse
         parse_groups = {}
-        
+
         # Create iterator of the message components
         groups = iter(message.split())
 
@@ -89,12 +94,18 @@ class METAR(pymetdecoder.Report):
                 parse_groups["is_automatic"] = " "
 
             # Determine surface wind
-            sw_groups = [grp]
-            grp = next(groups)
-            if re.match(obs.RE_SURFACE_WIND, grp):
-                sw_groups.append(grp)
-                grp = next(groups)
-            parse_groups["surface_wind"] = sw_groups
+            sw_groups = []
+            while True:
+                if len(sw_groups) == 0 and re.match(obs.RE_SURFACE_WIND, grp):
+                    sw_groups.append(grp)
+                    grp = next(groups)
+                elif len(sw_groups) == 1 and re.match(obs.RE_SURFACE_WIND_VAR, grp):
+                    sw_groups.append(grp)
+                    grp = next(groups)
+                else:
+                    break
+            if len(sw_groups) >= 1:
+                parse_groups["surface_wind"] = sw_groups
 
             # Determine visibility
             vis_groups = []
@@ -108,10 +119,6 @@ class METAR(pymetdecoder.Report):
                         grp = next(groups)
                     else:
                         break
-                        # vis_groups.append(grp)
-                        # grp = next(groups)
-                        # if not re.match(r"^R\d{2}", grp):
-                        #     break
                 for v in vis_groups:
                     if re.match(r"^R\d{2}", v):
                         if "runway_visual_range" not in parse_groups:
@@ -160,6 +167,16 @@ class METAR(pymetdecoder.Report):
                 parse_groups["qnh"] = grp
                 grp = next(groups)
 
+            # Determine sea surface temperature and state of the sea/significant wave height
+            sst_re = re.match(obs.RE_SEA_STATUS, grp)
+            if sst_re:
+                parse_groups["sea_surface_temperature"] = sst_re.groups()[0]
+                if sst_re.groups()[1].startswith("S"):
+                    parse_groups["sea_state"] = sst_re.groups()[1][1:]
+                elif sst_re.groups()[1].startswith("H"):
+                    parse_groups["wave_height"] = sst_re.groups()[1][1:]
+                grp = next(groups)
+
             # Determine recent weather
             if grp.startswith("RE"):
                 parse_groups["recent_weather"] = grp[2:]
@@ -191,7 +208,7 @@ class METAR(pymetdecoder.Report):
             while True:
                 parse_groups["_unhandled"].append(grp)
                 grp = next(groups)
-            
+
             # If we have reached this point, stop iterating
             raise StopIteration
         except StopIteration:
@@ -228,11 +245,11 @@ class METAR(pymetdecoder.Report):
         except UnboundLocalError as e:
             # import traceback
             # traceback.print_exc()
-            print("error found: {}".format(str(e)))            
+            print("error found: {}".format(str(e)))
 
         # Return the data
         return data
-        
+
     def encode(self, data, **kwargs):
         try:
             return self._encode(data, **kwargs)
@@ -248,10 +265,10 @@ class METAR(pymetdecoder.Report):
         # Process each section
         joined = None
         cavok = False
-        for s in SECTIONS:         
+        for s in SECTIONS:
             if isinstance(s, tuple):
                 if cavok and not s[3]:
-                    continue             
+                    continue
                 group = None
                 # if s[0] == "cavok":
                     # group = s[1]().encode(data[s[0]])
@@ -271,17 +288,35 @@ class METAR(pymetdecoder.Report):
                     groups.append(group)
             else:
                 this_group = []
+                display = False
+                _is_sea_group = True if "sea_surface_temperature" in [x[0] for x in s] else False
+                _has_wave_height = True if "wave_height" in data else False
                 for x in s:
                     if cavok and not x[3]:
                         continue
+
+                    # For the wave_height/sea_state, display wave_height if present
+                    # Otherwise, display sea_state
+                    action = None
+                    if _is_sea_group and x[0] != "sea_surface_temperature":
+                        if _has_wave_height and x[0] == "wave_height":
+                            action = True
+                        elif not _has_wave_height and x[0] == "sea_state":
+                            action = True
+                        else:
+                            action = False
+                    else:
+                        action = True
+                    if not action:
+                        continue
                     try:
                         group = x[1]().encode(data[x[0]])
+                        display = True
                     except:
                         group = x[1]().encode(None)
                     this_group.append(group)
-                groups.append("/".join(this_group))             
+                if display:
+                    groups.append("/".join(this_group))
 
         # Return the encoded report
         return " ".join(groups)
-
-

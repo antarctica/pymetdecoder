@@ -14,9 +14,11 @@ from pymetdecoder import Observation, logging, DecodeError, EncodeError, Invalid
 from pymetdecoder import code_tables as ct
 
 # Define common regular expressions here
-RE_PRESENT_WEATHER = r"^(NSW|[\+\-]?([A-Z]{2}))+$"
-RE_SURFACE_WIND = r"^(\d){3}V(\d){3}$"
-RE_TEMPERATURE = r"^(M)?(\d{2}|\/\/)\/(M)?(\d{2}|\/\/)$"
+RE_PRESENT_WEATHER  = r"^(NSW|[\+\-]?([A-Z]{2}))+$"
+RE_SURFACE_WIND     = r"^((\d){3}|VRB)(\d{2})(G(\d){2})?(KT|MPS)$"
+RE_SURFACE_WIND_VAR = r"^(\d){3}V(\d){3}$"
+RE_TEMPERATURE      = r"^(M)?(\d{2}|\/\/)\/(M)?(\d{2}|\/\/)$"
+RE_SEA_STATUS       = r"^W([0-9\/]{2})\/([\/]*|S[0-9\/]|H[0-9\/]{3})$"
 ################################################################################
 # SHARED CLASSES
 ################################################################################
@@ -45,6 +47,26 @@ class Minute(Observation):
     """
     _CODE_LEN = 2
     _VALID_RANGE = (0, 59)
+class Temperature(Observation):
+    _ENCODE_DEFAULT = "//"
+    def _decode(self, data):
+        if data.startswith("M"):
+            val = int(data[1:]) * -1
+        else:
+            val = int(data)
+        if val == 0:
+            tmin = -0.5 if data.startswith("M") else 0
+            tmax = 0 if data.startswith("M") else 0.5
+        else:
+            tmin = val - 0.5
+            tmax = val + 0.5
+        return { "value": val, "unit": "Cel", "min": tmin, "max": tmax }
+    def _encode(self, data):
+        val = round(data["value"])
+        if val < 0 or "min" in data and data["min"] < 0:
+            return "M{:02d}".format(abs(val))
+        else:
+            return "{:02d}".format(val)
 ################################################################################
 # OTHER CLASSES
 ################################################################################
@@ -69,7 +91,7 @@ class CloudAmountHeight(Observation):
     def _decode(self, cloud):
         try:
             (NNN, hhh, convective) = re.match(r"^([A-Z]{3})([0-9]*)(CB|TCU|\/\/\/)?$", cloud).groups()
-        except: 
+        except:
             raise InvalidCode(cloud, "cloud amount and height")
         return {
             "amount": self.Amount().decode(NNN),
@@ -235,7 +257,7 @@ class IsSpecial(Observation):
     """
     Is this a SPECI obs?
 
-    * ob_type - message type (either METAR or SPECI) 
+    * ob_type - message type (either METAR or SPECI)
     """
     _DESCRIPTION = "message type"
     _VALID_REGEXP = "^(METAR|SPECI)"
@@ -346,17 +368,13 @@ class RunwayVisual(Observation):
     def _decode(self, rvr):
         # (runway, vis) = rvr.split("/")
         try:
-            groups = re.match(r"^R((0?[1-9]|[1-2]\d|3[0-6])[LCR]?)\/([PM]?)(\d{4}|\/{4})([UDN]?|FT)(V([PM]?)(\d{4}|\/{4})([UDN]?|FT))?$", rvr).groups()
-            # (RR, extreme_1, vis_1, tendency_1, variation, extreme_2, vis_2, tendency_2) = groups
-            # print(groups)
-            # (RR, extreme, vis, tendency) = re.match(r"^R(\d{2})\/([PM]?)(\d{4}|\/{4})([UDN]?)$", rvr).groups()
+            groups = re.match(r"^R((0?[1-9]|[1-2]\d|3[0-6])[LCR]?)\/([PM]?)(\d{4}|\/{4})((FT)?(\/)?)([UDN]?)(V([PM]?)(\d{4}|\/{4})((FT)?(\/)?)([UDN]?))?$", rvr).groups()
         except:
             raise InvalidCode(rvr, "runway visual reading")
 
         return {
             "runway": self.Runway().decode(groups[0]),
             "visibility": self.Visibility().decode(groups[2:])
-            # "visibility": self.Visibility().decode(vis_1, extreme=[extreme_1, extreme_2], tendency=[tendency_1, tendency_2])
         }
     def _encode(self, data):
         groups = []
@@ -389,15 +407,15 @@ class RunwayVisual(Observation):
         }
         def _get_extreme(self, data, e):
             if len(e) == 0:
-                return data           
+                return data
             try:
                 data["quantifier"] = self._EXTREMES[e]
             except KeyError:
-                raise InvalidCode(e, "RVR extreme")           
+                raise InvalidCode(e, "RVR extreme")
             return data
         def _get_tendency(self, data, t):
             if len(t) == 0:
-                return data           
+                return data
             try:
                 data["tendency"] = self._TENDENCIES[t]
             except KeyError:
@@ -405,28 +423,29 @@ class RunwayVisual(Observation):
             return data
         def _decode(self, vis):
             # If there's no extreme, tendency or variation, then it's a normal visibility
-            if vis[3] is None and vis[0] == "" and (vis[2] == "" or vis[2] == "FT"):
-                return Visibility().decode("{}{}".format(vis[1], vis[2]))
+            if vis[0] == "" and vis[5] == "" and vis[6] is None:
+                return Visibility().decode("{}{}".format(vis[1], vis[3] if vis[3] is not None else ""))
 
-            if vis[3] is None:
+            if vis[6] is None:
                 data = {
                     "value": int(vis[1]),
                     "unit": self._UNIT if vis[2] != "FT" else "[ft_us]"
                 }
                 data = self._get_extreme(data, vis[0])
                 if vis[2] != "FT":
-                    data = self._get_tendency(data, vis[2]) 
+                    data = self._get_tendency(data, vis[5])
             else:
+                unit = "[ft_us]" if (vis[3] == "FT" or vis[10] == "FT") else self._UNIT
                 data = {
                     "variation": {
-                        "min": { "value": int(vis[1]), "unit": self._UNIT },
-                        "max": { "value": int(vis[5]), "unit": self._UNIT }
+                        "min": { "value": int(vis[1]), "unit": unit },
+                        "max": { "value": int(vis[8]), "unit": unit }
                     }
                 }
                 data["variation"]["min"] = self._get_extreme(data["variation"]["min"], vis[0])
-                data["variation"]["max"] = self._get_extreme(data["variation"]["max"], vis[4])
-                data["variation"]["min"] = self._get_tendency(data["variation"]["min"], vis[2])
-                data["variation"]["max"] = self._get_tendency(data["variation"]["max"], vis[6])
+                data["variation"]["max"] = self._get_extreme(data["variation"]["max"], vis[7])
+                data["variation"]["min"] = self._get_tendency(data["variation"]["min"], vis[5])
+                data["variation"]["max"] = self._get_tendency(data["variation"]["max"], vis[12])
 
             return data
         def _encode(self, data):
@@ -453,13 +472,35 @@ class RunwayVisual(Observation):
                         pass
                     output += "{:04d}".format(v[a]["value"])
                     try:
-                        output += [x for x in self._TENDENCIES if self._TENDENCIES[x] == v[a]["tendency"]][0]
+                        tendency = [x for x in self._TENDENCIES if self._TENDENCIES[x] == v[a]["tendency"]][0]
+                        output += "FT/{}".format(tendency) if data["variation"]["min"]["unit"] == "[ft_us]" else tendency
                     except:
                         pass
                     if a == "min":
                         output += "V"
-                
+
             return output
+class SeaState(Observation):
+    """
+    State of the sea
+    """
+    _CODE_LEN = 1
+    _CODE_TABLE = ct.CodeTable3700
+    def _encode(self, data):
+        if data is None:
+            return "/"
+        else:
+            return "S{}".format(self._CODE_TABLE().encode(data))
+class SeaSurfaceTemperature(Temperature):
+    """
+    Sea surface temperature
+    """
+    def _encode(self, data):
+        val = round(data["value"])
+        if val < 0 or "min" in data and data["min"] < 0:
+            return "WM{:02d}".format(abs(val))
+        else:
+            return "W{:02d}".format(val)
 class SurfaceWind(Observation):
     """
     Surface wind
@@ -490,7 +531,7 @@ class SurfaceWind(Observation):
 
         return retval
     def _encode(self, data, **kwargs):
-        groups = []        
+        groups = []
         groups.append(
             "{ddd}{ff}{gust}{unit}".format(
                 ddd = self.Direction().encode(data["direction"] if "direction" in data else None, allow_none=True),
@@ -501,7 +542,7 @@ class SurfaceWind(Observation):
         if "variation" in data:
             if data["variation"] is not None:
                 groups.append(self.Variation().encode(data["variation"] if "variation" in data else None, allow_none=True))
-        
+
         return " ".join(groups)
     class Direction(Observation):
         _CODE_LEN = 3
@@ -533,7 +574,7 @@ class SurfaceWind(Observation):
         def _decode(self, data):
             try:
                 (dn, dx) = re.match(r"^([0-9]{3})V([0-9]*)$", data).groups()
-            except Exception as e: 
+            except Exception as e:
                 raise InvalidCode(data, "variation in wind direction")
             return { "from": int(dn), "to": int(dx), "unit": self._UNIT }
         def _encode(self, data, **kwargs):
@@ -541,50 +582,6 @@ class SurfaceWind(Observation):
                 dn = "{:03d}".format(data["from"]),
                 dx = "{:03d}".format(data["to"])
             )
-# class Temperature(Observation):
-#     """
-#     Temperature
-
-#     * T'T'/Td'Td' - air temperature and dew point temperature
-#     """
-#     _CODE_LEN = 5
-    # def _decode(self, data):
-    #     try:
-    #         (Ts, TT, Tds, Td) = re.match(r"^(M)?(\d{2}|\/\/)\/(M)?(\d{2}|\/\/)", data).groups()
-    #         TT = "{}{}".format(Ts if Ts is not None else "", TT)
-    #         Td = "{}{}".format(Tds if Tds is not None else "", Td)
-    #     except:
-    #         raise InvalidCode(data, "temperature")
-        
-    #     return {
-    #         "air_temperature": self.Temperature().decode(TT),
-    #         "dew_point_temperature": self.Temperature().decode(Td)
-    #     }
-    # def _encode(self, data):
-    #     return "{TT}/{Td}".format(
-    #         TT = self.Temperature().encode(data["air_temperature"] if "air_temperature" in data else None),
-    #         Td = self.Temperature().encode(data["dew_point_temperature"] if "dew_point_temperature" in data else None)
-    #     )
-class Temperature(Observation):
-    _ENCODE_DEFAULT = "//"
-    def _decode(self, data):
-        if data.startswith("M"):
-            val = int(data[1:]) * -1
-        else:
-            val = int(data)
-        if val == 0:
-            tmin = -0.5 if data.startswith("M") else 0
-            tmax = 0 if data.startswith("M") else 0.5
-        else:
-            tmin = val - 0.5
-            tmax = val + 0.5
-        return { "value": val, "unit": "Cel", "min": tmin, "max": tmax }
-    def _encode(self, data):
-        val = round(data["value"])
-        if val < 0 or "min" in data and data["min"] < 0:
-            return "M{:02d}".format(abs(val))
-        else:
-            return "{:02d}".format(val)
 class Trend(Observation):
     """
     NOSIG, TEMPO and BECMG trends
@@ -664,20 +661,22 @@ class Visibility(Observation):
                 return {
                     "value": value,
                     "unit": "[mi_us]",
-                    "direction": None
+                    "direction": None,
+                    "no_directional_variation": False
                 }
             elif data.endswith("FT"):
                 # Visiblity measured in feet
                 return {
                     "value": int(data[0:-2]),
                     "unit": "[ft_us]",
-                    "direction": None
+                    "direction": None,
+                    "no_directional_variation": False
                 }
             else:
                 # value = int(data)
                 value = int(data[0:4])
                 direction = data[4:]
-                if direction != "" and direction not in ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]:
+                if direction != "" and direction not in ["N", "NE", "E", "SE", "S", "SW", "W", "NW", "NDV"]:
                     raise DecodeError("{} is an invalid direction".format(direction))
                 if 0 < value < 800:
                     increment = 50
@@ -686,7 +685,13 @@ class Visibility(Observation):
                 elif 5000 <= value < 9999:
                     increment = 1000
                 elif value == 9999:
-                    return { "value": 10000, "unit": self._UNIT, "quantifier": "isGreaterThan", "direction": direction if direction != "" else None }
+                    return {
+                        "value": 10000,
+                        "unit": self._UNIT,
+                        "quantifier": "isGreaterThan",
+                        "direction": None if direction in ["", "NDV"] else direction,
+                        "no_directional_variation": True if direction == "NDV" else False
+                    }
                 min_val = int(value / increment) * increment
                 max_val = min_val + increment
                 return {
@@ -694,7 +699,8 @@ class Visibility(Observation):
                     "min": min_val,
                     "max": max_val,
                     "unit": self._UNIT,
-                    "direction": direction if direction != "" else None
+                    "direction": None if direction in ["", "NDV"] else direction,
+                    "no_directional_variation": True if direction == "NDV" else False
                 }
         except:
             raise DecodeError("Could not convert {} to a visibility value".format(value))
@@ -714,9 +720,14 @@ class Visibility(Observation):
                 val = int(data["value"] / increment) * increment
             if data["direction"] is not None and data["direction"] not in ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]:
                 raise EncodeError("{} is an invalid direction".format(data["direction"]))
+            if "no_directional_variation" in data and data["no_directional_variation"]:
+                direction = "NDV"
+            else:
+                direction = data["direction"] if data["direction"] is not None else ""
+
             return "{VVVV}{d}".format(
                 VVVV = "{:04d}".format(val),
-                d = data["direction"] if data["direction"] is not None else ""
+                d = direction
             )
         elif data["unit"] == "[mi_us]":
             # Round according to 15.6.4 for US
@@ -755,3 +766,16 @@ class Visibility(Observation):
                 )
             elif data["value"] >= 6000:
                 return "6000FT"
+class WaveHeight(Observation):
+    """
+    Height of waves
+    """
+    _CODE_LEN = 3
+    _UNIT = "m"
+    def _decode(self, HHH):
+        return {
+            "value": int(HHH) / 10.0,
+            "unit": self._UNIT
+        }
+    def _encode(self, data):
+        return "H{:03d}".format(int(data["value"] * 10))
