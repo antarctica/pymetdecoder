@@ -1,0 +1,26 @@
+[tool.poetry]
+name = "pymetdecoder"
+version = "0.2.0"
+description = "Python module to decode/encode met reports e.g. SYNOPs"
+authors = ["Tim Barnes <tdba@bas.ac.uk>"]
+license = "Open Government License v3.0"
+readme = "README.md"
+homepage = "https://github.com/antarctica/pymetdecoder"
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Science/Research",
+    "License :: Other/Proprietary License",
+    "Programming Language :: Python :: 3"
+]
+exclude = ["pymetdecoder/tests/*"]
+
+[tool.poetry.dependencies]
+python = "^3.8"
+
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.4"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
