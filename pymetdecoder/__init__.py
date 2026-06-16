@@ -10,11 +10,17 @@
 # TDBA 2023-04-21:
 #   * Rainfall group in section 3 now decodes properly if cloud group (or other
 #     group) follows (#9)
+# TDBA 2026-06-15:
+#   * Now uses module specific logger instead of root logger (#17)
 ################################################################################
 # IMPORTS
 ################################################################################
-import sys, json, logging, re
+import sys, json, logging, re, warnings
 from . import conversion
+
+# Setup logging
+logger = logging.getLogger(__name__)
+logger.addHandler(logging.NullHandler())
 ################################################################################
 # EXCEPTION CLASSES
 ################################################################################
@@ -36,6 +42,12 @@ class InvalidGroup(Exception):
     def __init__(self, group):
         self.msg = "{} is not a valid group".format(group)
         super().__init__(self.msg)
+class DecodeWarning(UserWarning):
+    pass
+class EncodeWarning(UserWarning):
+    pass
+class ValidationWarning(UserWarning):
+    pass
 ################################################################################
 # BASE CLASSES
 ################################################################################
@@ -111,13 +123,14 @@ class Observation(object):
             # Decode
             return self._decode(raw, **kwargs)
         except NotImplementedError as e:
-            logging.error(str(e))
+            logger.error(str(e))
             sys.exit(1)
         except InvalidCode as e:
             # logging.warning(str(e))
             raise DecodeError(str(e))
         except Exception as e:
-            logging.warning(str(e))
+            # logger.warning(str(e))
+            # warnings.warn(str(e), DecodeWarning)
             raise DecodeError("Unable to decode group {}".format(raw))
     def encode(self, raw, **kwargs):
         """
@@ -145,12 +158,13 @@ class Observation(object):
             else:
                 return "{}{}".format(group, val)
         except NotImplementedError as e:
-            logging.error(str(e))
+            logger.error(str(e))
             sys.exit(1)
         except conversion.ConversionError as e:
-            logging.warning(str(e))
+            logger.warning(str(e), EncodeWarning)
         except Exception as e:
-            logging.warning("No valid {}. Using {}".format(type(self).__name__, self._ENCODE_DEFAULT))
+            # logger.warning("No valid {}. Using {}".format(type(self).__name__, self._ENCODE_DEFAULT))
+            logger.warning("No valid {}. Using {}".format(type(self).__name__, self._ENCODE_DEFAULT), EncodeWarning)
             if "group" in kwargs:
                 return "{}{}".format(kwargs.get("group"), self._ENCODE_DEFAULT)
             else:
@@ -204,11 +218,11 @@ class Observation(object):
         """
         valid = self._is_valid(value, **kwargs)
         if not valid:
-            foo = InvalidCode(value, type(self).__name__)
+            invalid_code = InvalidCode(value, type(self).__name__)
             if raise_exception:
-                raise foo
+                raise invalid_code
             else:
-                logging.warning(foo.msg)
+                warnings.warn(invalid_code.msg, ValidationWarning)
         return valid
     def _is_valid(self, value, **kwargs):
         """
@@ -288,10 +302,12 @@ class Observation(object):
                 data["unit"] = unit
             return data
         except ValueError as e:
-            logging.warning(InvalidCode(val, type(self).__name__))
+            warnings.warn(InvalidCode(val, type(self).__name__), DecodeWarning)
+            # logger.warning(InvalidCode(val, type(self).__name__))
             return None
         except Exception as e:
-            logging.warning(str(e))
+            warnings.warn(str(e), DecodeWarning)
+            # logger.warning(str(e))
             return None
     def _encode_value(self, data, **kwargs):
         try:

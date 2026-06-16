@@ -14,7 +14,7 @@
 ################################################################################
 # CONFIGURATION
 ################################################################################
-import re
+import re, warnings
 from pymetdecoder import Observation, logging, DecodeError, EncodeError, InvalidCode
 from pymetdecoder import code_tables as ct
 ################################################################################
@@ -114,12 +114,12 @@ class Callsign(Observation):
     * Abnnn - WMO regional association area
     """
     def _decode(self, callsign):
-        if re.match("^(1[1-7]|2[1-6]|3[1-4]|4[1-8]|5[1-6]|6[1-6]|7[1-4])\d{3}$", callsign):
+        if re.match(r"^(1[1-7]|2[1-6]|3[1-4]|4[1-8]|5[1-6]|6[1-6]|7[1-4])\d{3}$", callsign):
             return {
                 "region": ct.CodeTable0161().decode(callsign[0:2]),
                 "value":  callsign
             }
-        elif re.match("^[A-Za-z\d]{3,}", callsign):
+        elif re.match(r"^[A-Za-z\d]{3,}", callsign):
             return { "value": str(callsign).upper() }
         else:
             raise InvalidCode(callsign, "callsign")
@@ -242,7 +242,7 @@ class CloudType(Observation):
             elif data["middle_cloud_type"] is not None and 0 <= data["middle_cloud_type"]["value"] <= 9:
                 data["middle_cloud_amount"] = cover
             else:
-                logging.warning("Cloud cover (Nh = {}) reported, but there are no low or middle clouds (CL = {}, CM = {})".format(Nh, CL, CM))
+                warnings.warn("Cloud cover (Nh = {}) reported, but there are no low or middle clouds (CL = {}, CM = {})".format(Nh, CL, CM), pymetdecoder.DecodeWarning)
                 data["cloud_amount"] = cover
 
         # Return data
@@ -1165,9 +1165,9 @@ class StationPosition(Observation):
 
             # Check latitude unit digit and longitude unit digit match expected values
             if lat[-2] != ULa:
-                logging.warning("Latitude unit digit does not match expected value ({} != {})".format(str(lat)[-2], ULa))
+                warnings.warn("Latitude unit digit does not match expected value ({} != {})".format(str(lat)[-2], ULa), pymetdecoder.DecodeWarning)
             if lon[-2] != ULo:
-                logging.warning("Longitude unit digit does not match expected value ({} != {})".format(str(lon)[-2], ULo))
+                warnings.warn("Longitude unit digit does not match expected value ({} != {})".format(str(lon)[-2], ULo), pymetdecoder.DecodeWarning)
 
             # Decode values
             data["marsden_square"] = self.MarsdenSquare().decode(MMM)
@@ -1377,7 +1377,7 @@ class SurfaceWind(Observation):
 
         # Perform sanity check - if the wind is calm, it can't have a speed
         if direction is not None and direction["calm"] and speed is not None and speed["value"] > 0:
-            logging.warning("Wind is calm, yet has a speed (dd: {}, ff: {})".format(dd, ff))
+            warnings.warn("Wind is calm, yet has a speed (dd: {}, ff: {})".format(dd, ff), pymetdecoder.DecodeWarning)
             speed = None
 
         return {
@@ -1465,11 +1465,11 @@ class Temperature(Observation):
         # The last character can sometimes be a "/" instead of a 0, so fix.
         # But, only do this if the whole thing isn't /// (see issue #10)
         if TTT != "///":
-            TTT = re.sub("\/$", "0", TTT)
+            TTT = re.sub(r"\/$", "0", TTT)
 
         # If sign is not 0 or 1, return None with log message
         if sn not in ["0", "1", "/"]:
-            logging.warning("{} is an invalid temperature group".format(group))
+            warnings.warn("{} is an invalid temperature group".format(group), pymetdecoder.DecodeWarning)
             return None
 
         # Return value
@@ -1542,7 +1542,7 @@ class VisibilityDirection(Observation):
 
         # Check if direction is valid
         if dir == "/":
-            logging.warning(InvalidCode(dir, "visibility direction"))
+            warnings.warn(InvalidCode(dir, "visibility direction"), pymetdecoder.DecodeWarning)
             return None
 
         # If direction code is 9, it's variable visibility

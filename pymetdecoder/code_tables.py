@@ -5,10 +5,16 @@
 #
 # TDBA 2019-01-18:
 #   * First version
+# TDBA 2026-06-16:
+#   * Improved logging
 ################################################################################
 # CONFIGURATION
 ################################################################################
 import pymetdecoder, re, logging, sys
+
+# Setup logging
+logger = logging.getLogger(__name__)
+logger.addHandler(logging.NullHandler())
 ################################################################################
 # FUNCTIONS
 ################################################################################
@@ -34,9 +40,9 @@ def check_range(x, table, min=0, max=0, nullChar="/"):
         elif min <= int(x) <= max:
             return int(x)
         else:
-            logging.warning("{} is not a valid code for code table {}".format(x, table))
+            warnings.warn("{} is not a valid code for code table {}".format(x, table), pymetdecoder.ValidationWarning)
     except Exception as e:
-        logging.warning("{} is not a valid code for code table {}".format(x, table))
+        warnings.warn("{} is not a valid code for code table {}".format(x, table), pymetdecoder.ValidationWarning)
 ################################################################################
 # BASE CLASSES
 ################################################################################
@@ -59,17 +65,17 @@ class CodeTable(object):
                 return None
             return { **table, **out_val }
         except NotImplementedError as e:
-            logging.error(str(e))
+            logger.error(str(e))
             sys.exit(1)
         except ValueError as e:
-            logging.warning("{} is not a valid code for code table {}".format(value, self._TABLE))
+            warnings.warn("{} is not a valid code for code table {}".format(value, self._TABLE), pymetdecoder.DecodeWarning)
             return None
         except IndexError as e:
-            logging.warning("{} is not a valid code for code table {}".format(value, self._TABLE))
+            warnings.warn("{} is not a valid code for code table {}".format(value, self._TABLE), pymetdecoder.DecodeWarning)
         except pymetdecoder.DecodeError as e:
-            logging.warning(str(e))
+            warnings.warn(str(e), pymetdecoder.DecodeWarning)
         except pymetdecoder.InvalidCode as e:
-            logging.warning(str(e))
+            warnings.warn(str(e), pymetdecoder.DecodeWarning)
         except Exception as e:
             raise pymetdecoder.DecodeError("Unable to decode {} in {}: {}".format(value, type(self).__name__, str(e)))
             return None
@@ -81,12 +87,12 @@ class CodeTable(object):
                 return value["_code"]
             return self._encode(value, **kwargs)
         except NotImplementedError as e:
-            logging.error(str(e))
+            logger.error(str(e))
             sys.exit(1)
-        except pymetdecoder.DecodeError as e:
-            logging.warning(str(e))
+        except pymetdecoder.EncodeError as e:
+            warnings.warn(str(e), pymetdecoder.EncodeWarning)
         except Exception as e:
-            logging.warning("Could not encode value {} in {}".format(value, type(self).__name__))
+            warnings.warn("Could not encode value {} in {}".format(value, type(self).__name__), pymetdecoder.EncodeWarning)
             raise pymetdecoder.EncodeError()
     def _decode(self, raw, **kwargs):
         """
@@ -325,7 +331,7 @@ class CodeTable0833(CodeTable):
         d = int(d)
         (min, max, quantifier, unknown) = (None, None, None, False)
         if d == 8:
-            logging.warning("{} is not a valid code for code table {}".format(d, self._TABLE))
+            warnings.warn("{} is not a valid code for code table {}".format(d, self._TABLE), pymetdecoder.DecodeWarning)
             return None
         elif d == 9:
             unknown = True

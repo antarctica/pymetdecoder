@@ -10,7 +10,7 @@
 ################################################################################
 import re, math
 from fractions import Fraction
-from pymetdecoder import Observation, logging, DecodeError, EncodeError, InvalidCode
+from pymetdecoder import Observation, DecodeError, EncodeError, InvalidCode
 from pymetdecoder import code_tables as ct
 
 # Define common regular expressions here
