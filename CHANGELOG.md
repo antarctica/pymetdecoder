@@ -5,10 +5,12 @@
 ### Added
 
 * Can now encode/decode reports directly from the command line
+* Added functionality to encode/decode METARs
 
 ### Changed
 
 * Migrated to Poetry for packaging
+* (#17) - Now uses module specific logging
 
 ## 0.1.6 [2023-12-23]
 

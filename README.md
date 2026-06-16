@@ -244,6 +244,7 @@ $ echo "AAXX 01004 88889 12782 61506 10094 20047 30111 40197 53007 60001 81541 3
 ```
 
 Encoding reports works in the same way. The `--synop` switch can be specified multiple times if multiple SYNOPs are to be decoded/encoded.
+Similarly, a `--metar` switch can be used to decode/encode METARs.
 
 ## Changelog
 
@@ -274,6 +275,6 @@ If you would like to contribute to this module by adding in the functionality to
 
 ## License
 
-(c) UK Research and Innovation (UKRI), 2021 - 2025, British Antarctic Survey.
+(c) UK Research and Innovation (UKRI), 2021 - 2026, British Antarctic Survey.
 You may use and re-use this software and associated documentation files free of charge in any format or medium, under the terms of the Open Government Licence v3.0.
 You may obtain a copy of the Open Government Licence at http://www.nationalarchives.gov.uk/doc/open-government-licence/
