@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## Next version [XXXX-XX-XX]
+## 0.2.0 [2026-06-19]
 
 ### Added
 
