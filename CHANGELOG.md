@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## 0.2.1 [2026-06-25]
+
+### Fixed
+
+* Fixed warning messages that got missed on the previous release
+
 ## 0.2.0 [2026-06-19]
 
 ### Added

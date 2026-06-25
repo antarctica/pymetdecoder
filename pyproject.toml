@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pymetdecoder"
-version = "0.2.0"
+version = "0.2.1"
 description = "Python module to decode/encode met reports e.g. SYNOPs"
 authors = ["Tim Barnes <tdba@bas.ac.uk>"]
 license = "Open Government License v3.0"
