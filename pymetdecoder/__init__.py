@@ -161,10 +161,10 @@ class Observation(object):
             logger.error(str(e))
             sys.exit(1)
         except conversion.ConversionError as e:
-            logger.warning(str(e), EncodeWarning)
+            warnings.warn(str(e), EncodeWarning)
         except Exception as e:
             # logger.warning("No valid {}. Using {}".format(type(self).__name__, self._ENCODE_DEFAULT))
-            logger.warning("No valid {}. Using {}".format(type(self).__name__, self._ENCODE_DEFAULT), EncodeWarning)
+            warnings.warn("No valid {}. Using {}".format(type(self).__name__, self._ENCODE_DEFAULT), EncodeWarning)
             if "group" in kwargs:
                 return "{}{}".format(kwargs.get("group"), self._ENCODE_DEFAULT)
             else:
