@@ -15,6 +15,7 @@
 # CONFIGURATION
 ################################################################################
 import re, warnings
+import pymetdecoder
 from pymetdecoder import Observation, logging, DecodeError, EncodeError, InvalidCode
 from pymetdecoder import code_tables as ct
 ################################################################################
