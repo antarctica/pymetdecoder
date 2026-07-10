@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## 0.2.2 [2026-07-10]
+
+### Fixed
+
+* (#18) - Added missing import (thanks to @akeeman)
+
 ## 0.2.1 [2026-06-25]
 
 ### Fixed
