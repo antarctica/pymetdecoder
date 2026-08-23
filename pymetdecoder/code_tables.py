@@ -347,11 +347,14 @@ class CodeTable0877(CodeTable):
     True direction, in tens of degrees, from which wind is blowing
     """
     _TABLE = "0877"
+
     def _decode(self, dd):
         calm = False
         varAllUnknown = False
         direction = None
+
         dd = int(dd)
+
         if dd == 0:
             calm = True
         elif dd == 99:
@@ -361,16 +364,22 @@ class CodeTable0877(CodeTable):
         else:
             raise ValueError(dd)
 
-        # Return the values
         return {
             "value": direction,
             "varAllUnknown": varAllUnknown,
             "calm": calm
         }
+
     def _encode(self, data):
+        # SYNOP 99 = variable / unknown wind direction
+        if data.get("varAllUnknown"):
+            return 99
+
         val = data["value"]
         code = int(val / 10) + (1 if val % 10 >= 5 else 0)
         return code
+
+
 class CodeTable0938(CodeTableLookup):
     """
     Elevation above the horizon of the base of anvil of cumulonimbus or of the
