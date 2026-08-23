@@ -449,12 +449,103 @@ class SYNOP(pymetdecoder.Report):
             if next_group == "555":
                 data["section5"] = []
                 next_group = next(groups)
-                # last_header = None
+
                 while True:
-                    # header = int(next_group[0])
-                    # if last_header is not None and header < last_header:
-                        # break
+                    if next_group in ("66666", "77777"):
+                        break
+
                     data["section5"].append(next_group)
+
+                    # 101SnTwTwTw - Wet-bulb temperature
+                    if re.match(r"^101[0-9/]{2}$", next_group):
+                        data["wet_bulb_temperature"] = obs.WetBulbTemperature().decode(next_group)
+
+                    # 29sss - Relative humidity in Section 5
+                    elif re.match(r"^29[0-9/]{3}$", next_group):
+                        data["section5_relative_humidity"] = (
+                            obs.RelativeHumidity().decode(next_group[2:5])
+                        )
+
+                    # 336ddff - Maximum wind over 24 hours
+                    elif re.match(r"^336[0-9/]{2}$", next_group):
+                        data["max_wind_24h"] = obs.MaximumWind24h().decode(next_group[1:5])
+
+                    # 436ddff - Maximum gust over 24 hours
+                    elif re.match(r"^436[0-9/]{2}$", next_group):
+                        data["max_gust_24h"] = obs.MaximumWind24h().decode(next_group[1:5])
+
+                    next_group = next(groups)
+
+            ### SECTION 6 ###
+            if next_group == "66666":
+                data["section6"] = []
+                next_group = next(groups)
+
+                while True:
+                    if next_group == "77777":
+                        break
+
+                    data["section6"].append(next_group)
+
+                    # Soil temperature groups:
+                    # DDDtt where D is the depth code and tt is
+                    # the encoded soil temperature.
+                    #
+                    # Supported depths:
+                    # 0 -> 5 cm
+                    # 1 -> 10 cm
+                    # 2 -> 20 cm
+                    # 3 -> 30 cm
+                    # 5 -> 50 cm
+                    # 9 -> 100 cm
+                    if (
+                        len(next_group) == 5
+                        and next_group[0] in obs.SoilTemperature._DEPTHS
+                        and next_group[1:].isdigit()
+                    ):
+                        if "soil_temperature" not in data:
+                            data["soil_temperature"] = []
+
+                        data["soil_temperature"].append(
+                            obs.SoilTemperature().decode(next_group)
+                        )
+
+                    next_group = next(groups)
+
+            ### SECTION 7 ###
+            if next_group == "77777":
+                data["section7"] = []
+                next_group = next(groups)
+
+                while True:
+                    data["section7"].append(next_group)
+
+                    # Soil moisture groups:
+                    #
+                    # Standard form:
+                    #   d00MM
+                    #
+                    # where d is the soil-depth code and MM is
+                    # the soil-moisture percentage.
+                    #
+                    # The 100 cm observation uses the special
+                    # form 990MM.
+                    if (
+                        len(next_group) == 5
+                        and next_group[0] in obs.SoilMoisture._DEPTHS
+                        and (
+                            next_group[1:3] == "00"
+                            or next_group[:2] == "99"
+                        )
+                        and next_group[3:].isdigit()
+                    ):
+                        if "soil_moisture" not in data:
+                            data["soil_moisture"] = []
+
+                        data["soil_moisture"].append(
+                            obs.SoilMoisture().decode(next_group)
+                        )
+
                     next_group = next(groups)
         except StopIteration:
             # If we have reached this point with iceGroups or group 9 still intact, parse them
@@ -853,8 +944,125 @@ class SYNOP(pymetdecoder.Report):
                 groups.append(obs.CloudBaseBelowStationLevel().encode(d))
 
         ### SECTION 5
+        section5_groups = []
+
         if "section5" in data:
-            groups.extend(["555"] + data["section5"])
+            for section5_group in data["section5"]:
+
+                # 101SnTwTwTw - Wet-bulb temperature
+                if re.match(r"^101[0-9/]{2}$", section5_group):
+                    if "wet_bulb_temperature" in data:
+                        section5_groups.append(
+                            "1" + obs.WetBulbTemperature().encode(
+                                data["wet_bulb_temperature"]
+                            )
+                        )
+                    else:
+                        section5_groups.append(section5_group)
+
+                # 29sss - Relative humidity
+                elif re.match(r"^29[0-9/]{3}$", section5_group):
+                    if "section5_relative_humidity" in data:
+                        section5_groups.append(
+                            "29" + obs.RelativeHumidity().encode(
+                                data["section5_relative_humidity"]
+                            )
+                        )
+                    else:
+                        section5_groups.append(section5_group)
+
+                # 336ddff - Maximum wind over 24 hours
+                elif re.match(r"^336[0-9/]{2}$", section5_group):
+                    if "max_wind_24h" in data:
+                        section5_groups.append(
+                            "3" + obs.MaximumWind24h().encode(
+                                data["max_wind_24h"]
+                            )
+                        )
+                    else:
+                        section5_groups.append(section5_group)
+
+                # 436ddff - Maximum gust over 24 hours
+                elif re.match(r"^436[0-9/]{2}$", section5_group):
+                    if "max_gust_24h" in data:
+                        section5_groups.append(
+                            "4" + obs.MaximumWind24h().encode(
+                                data["max_gust_24h"]
+                            )
+                        )
+                    else:
+                        section5_groups.append(section5_group)
+
+                # Unknown Section 5 group: preserve unchanged.
+                else:
+                    section5_groups.append(section5_group)
+
+        if len(section5_groups) > 0:
+            groups.extend(["555"] + section5_groups)
+
+        ### SECTION 6
+        if "section6" in data:
+            section6_groups = []
+            soil_temperature_index = 0
+
+            for section6_group in data["section6"]:
+                # Recognised soil-temperature group.
+                if (
+                    len(section6_group) == 5
+                    and section6_group[0] in obs.SoilTemperature._DEPTHS
+                    and section6_group[1:].isdigit()
+                ):
+                    if "soil_temperature" in data and soil_temperature_index < len(data["soil_temperature"]):
+                        section6_groups.append(
+                            obs.SoilTemperature().encode(
+                                data["soil_temperature"][soil_temperature_index]
+                            )
+                        )
+                        soil_temperature_index += 1
+                    else:
+                        section6_groups.append(section6_group)
+
+                # Unsupported Section 6 group: preserve unchanged.
+                else:
+                    section6_groups.append(section6_group)
+
+            groups.extend(["66666"] + section6_groups)
+
+        ### SECTION 7
+        if "section7" in data:
+            section7_groups = []
+            soil_moisture_index = 0
+
+            for section7_group in data["section7"]:
+
+                # Recognised soil-moisture group.
+                if (
+                    len(section7_group) == 5
+                    and section7_group[0] in obs.SoilMoisture._DEPTHS
+                    and (
+                        section7_group[1:3] == "00"
+                        or section7_group[:2] == "99"
+                    )
+                    and section7_group[3:].isdigit()
+                ):
+                    if (
+                        "soil_moisture" in data
+                        and soil_moisture_index < len(data["soil_moisture"])
+                    ):
+                        section7_groups.append(
+                            obs.SoilMoisture().encode(
+                                data["soil_moisture"][soil_moisture_index]
+                            )
+                        )
+                        soil_moisture_index += 1
+                    else:
+                        section7_groups.append(section7_group)
+
+                # Unsupported Section 7 group: preserve unchanged.
+                else:
+                    section7_groups.append(section7_group)
+
+            groups.extend(["77777"] + section7_groups)
 
         # Return the encoded report
         return " ".join(groups)

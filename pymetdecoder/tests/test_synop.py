@@ -628,7 +628,6 @@ class TestSynopAAXX9Groups91(BaseTestSynop):
     expected = {
         "highest_gust": [{
             "speed": { "value": 15, "unit": "KT" },
-            "direction": None,
             "measure_period": { "value": 10, "unit": "min" }
         },{
             "speed": { "value": 3, "unit": "KT" },
@@ -931,6 +930,86 @@ class TestSynopBBXXAlternative(BaseTestSynop):
             "text": "icy conditions"
         }
     }
+
+
+class TestSynopAAXXSection5WetBulbTemperature(BaseTestSynop):
+    """
+    Tests 1SnTwTwTw wet-bulb temperature in Section 5.
+    """
+    SYNOP = "AAXX 21091 40792 42965 00903 10407 20026 38763 49968 57011 333 70000 91008 555 10193"
+
+    TEST_ATTRS = ["wet_bulb_temperature"]
+
+    expected = {
+        "wet_bulb_temperature": {
+            "value": 19.3,
+            "unit": "Cel",
+            "_table": "3855",
+            "sign": 1,
+            "measured": True,
+            "iced": False,
+            "_code": 0
+        }
+    }
+
+class TestSynopAAXXSection5WindAndHumidity(BaseTestSynop):
+    """
+    Tests Section 5 groups for wet-bulb temperature, relative humidity,
+    maximum wind over 24 hours, and maximum gust over 24 hours.
+    """
+    SYNOP = "AAXX 21091 40792 42965 00903 10407 20026 38763 49968 57011 333 70000 91008 555 10193 29010 33610 43619"
+
+    TEST_ATTRS = [
+        "wet_bulb_temperature",
+        "section5_relative_humidity",
+        "max_wind_24h",
+        "max_gust_24h"
+    ]
+
+    expected = {
+        "wet_bulb_temperature": {
+            "value": 19.3,
+            "unit": "Cel",
+            "_table": "3855",
+            "sign": 1,
+            "measured": True,
+            "iced": False,
+            "_code": 0
+        },
+        "section5_relative_humidity": {
+            "value": 10,
+            "unit": "%"
+        },
+        "max_wind_24h": {
+            "direction": {
+                "_table": "0877",
+                "value": 360,
+                "varAllUnknown": False,
+                "calm": False,
+                "_code": 36,
+                "unit": "deg"
+            },
+            "speed": {
+                "value": 10,
+                "unit": "m/s"
+            }
+        },
+        "max_gust_24h": {
+            "direction": {
+                "_table": "0877",
+                "value": 360,
+                "varAllUnknown": False,
+                "calm": False,
+                "_code": 36,
+                "unit": "deg"
+            },
+            "speed": {
+                "value": 19,
+                "unit": "m/s"
+            }
+        }
+    }
+
 class TestSynopAAXXSection5AfterSection1(BaseTestSynop):
     """
     Tests that section 5 groups are added to the "section5" key even if it follows
@@ -1060,3 +1139,523 @@ class TestSynopAAXXHighPressure(BaseTestSynop):
     expected = {
         "station_pressure": { "value": 1056.7, "unit": "hPa" }
     }
+
+class TestSynopAAXX910GustOnly(BaseTestSynop):
+    """
+    Tests 910ff: highest gust over 10 minutes.
+    910ff contains gust speed only and does not encode wind direction.
+    """
+    SYNOP = "AAXX 21001 40827 16/// /3606 10318 20038 38750 49953 56004 60001 333 70000 91012"
+
+    TEST_ATTRS = ["highest_gust"]
+
+    expected = {
+        "highest_gust": [{
+            "speed": {
+                "value": 12,
+                "unit": "m/s"
+            },
+            "measure_period": {
+                "value": 10,
+                "unit": "min"
+            }
+        }]
+    }
+
+class TestSynopAAXXVariableWindDirection(BaseTestSynop):
+    """
+    Tests 99ddff: variable wind direction.
+    Code 99 in Table 0877 indicates variable direction.
+    """
+    SYNOP = "AAXX 21001 40827 16000 09906 10318 20038 38750 49953 56004 60001"
+
+    TEST_ATTRS = ["surface_wind"]
+
+    expected = {
+        "surface_wind": {
+            "direction": {
+                "_table": "0877",
+                "value": None,
+                "varAllUnknown": True,
+                "calm": False,
+                "_code": 99,
+                "unit": "deg"
+            },
+            "speed": {
+                "value": 6,
+                "unit": "m/s"
+            }
+        }
+    }
+
+class TestSynopAAXXCalmWind(BaseTestSynop):
+    """
+    Tests 000ff: calm wind.
+    Code 00 in Table 0877 indicates calm wind.
+    """
+    SYNOP = "AAXX 21001 40827 16000 00000 10318 20038 38750 49953 56004 60001"
+
+    TEST_ATTRS = ["surface_wind"]
+
+    expected = {
+        "surface_wind": {
+            "direction": {
+                "_table": "0877",
+                "value": None,
+                "varAllUnknown": False,
+                "calm": True,
+                "_code": 0,
+                "unit": "deg"
+            },
+            "speed": {
+                "value": 0,
+                "unit": "m/s"
+            }
+        }
+    }
+
+
+class TestSynopAAXXSection1AndSection5Humidity:
+    """
+    Tests that Section 1 and Section 5 relative humidity are decoded
+    into separate fields and can be re-encoded independently.
+    """
+
+    SYNOP = (
+        "AAXX 21091 40792 42965 00903 10407 "
+        "29040 38763 49968 57011 333 "
+        "70000 91008 555 10193 29010 33610 43619"
+    )
+
+    def test_decode_separate_humidity(self):
+        synop = s.SYNOP()
+        data = synop.decode(self.SYNOP)
+
+        assert data["relative_humidity"] == {
+            "value": 40,
+            "unit": "%"
+        }
+
+        assert data["section5_relative_humidity"] == {
+            "value": 10,
+            "unit": "%"
+        }
+
+    def test_change_section5_only(self):
+        synop = s.SYNOP()
+        data = synop.decode(self.SYNOP)
+
+        data["section5_relative_humidity"] = {
+            "value": 27,
+            "unit": "%"
+        }
+
+        encoded = synop.encode(data)
+
+        assert "29040" in encoded
+        assert "29027" in encoded
+
+        # Section 1 RH must remain 40%.
+        assert encoded.index("29040") < encoded.index("555")
+
+        # Section 5 RH must remain after 555.
+        assert encoded.index("29027") > encoded.index("555")
+
+    def test_roundtrip(self):
+        synop = s.SYNOP()
+        data = synop.decode(self.SYNOP)
+        encoded = synop.encode(data)
+
+        assert encoded == self.SYNOP
+
+
+class TestSynopAAXXSectionBoundaries555666777:
+    """
+    Tests that Section 5, Section 6 and Section 7 are kept separate.
+    Section 6/7 contents are intentionally kept raw at this stage.
+    """
+
+    SYNOP = (
+        "AAXX 21091 40792 42965 00903 10407 20026 38763 49968 57011 "
+        "333 70000 91008 555 10193 29010 66666 "
+        "00506 10432 20388 30376 50380 90354 "
+        "77777 00004 10005 20006 30007 50008 70009 99010"
+    )
+
+    def test_section_boundaries(self):
+        data = s.SYNOP().decode(self.SYNOP)
+
+        assert data["section5"] == [
+            "10193",
+            "29010",
+        ]
+
+        assert data["section6"] == [
+            "00506",
+            "10432",
+            "20388",
+            "30376",
+            "50380",
+            "90354",
+        ]
+
+        assert data["section7"] == [
+            "00004",
+            "10005",
+            "20006",
+            "30007",
+            "50008",
+            "70009",
+            "99010",
+        ]
+
+class TestSynopAAXXSection6SoilTemperature5cm:
+    """
+    Tests 00506 in Section 6:
+    soil temperature at 5 cm depth = +50.6 C.
+    """
+
+    SYNOP = (
+        "AAXX 21091 40792 42965 00903 10407 20026 38763 49968 57011 "
+        "333 70000 91008 555 10193 29010 66666 "
+        "00506 10432 20388 30376 50380 90354 "
+        "77777 00004 10005 20006 30007 50008 70009 99010"
+    )
+
+    def test_decode(self):
+        data = s.SYNOP().decode(self.SYNOP)
+
+        assert data["soil_temperature"][0] == {
+            "depth": {
+                "value": 5,
+                "unit": "cm"
+            },
+            "temperature": {
+                "value": 50.6,
+                "unit": "Cel"
+            }
+        }
+
+class TestSynopAAXXSection6SoilTemperature10cm:
+    """
+    Tests 10432 in Section 6:
+    soil temperature at 10 cm depth = +43.2 C.
+    """
+
+    SYNOP = (
+        "AAXX 21091 40792 42965 00903 10407 20026 38763 49968 57011 "
+        "333 70000 91008 555 10193 29010 66666 "
+        "00506 10432 20388 30376 50380 90354 "
+        "77777 00004 10005 20006 30007 50008 70009 99010"
+    )
+
+    def test_decode(self):
+        data = s.SYNOP().decode(self.SYNOP)
+
+        assert data["soil_temperature"][1] == {
+            "depth": {
+                "value": 10,
+                "unit": "cm"
+            },
+            "temperature": {
+                "value": 43.2,
+                "unit": "Cel"
+            }
+        }
+
+class TestSynopAAXXSection6SoilTemperature20cm:
+    """
+    Tests 20388 in Section 6:
+    soil temperature at 20 cm depth = +38.8 C.
+    """
+
+    SYNOP = (
+        "AAXX 21091 40792 42965 00903 10407 20026 38763 49968 57011 "
+        "333 70000 91008 555 10193 29010 66666 "
+        "00506 10432 20388 30376 50380 90354 "
+        "77777 00004 10005 20006 30007 50008 70009 99010"
+    )
+
+    def test_decode(self):
+        data = s.SYNOP().decode(self.SYNOP)
+
+        assert data["soil_temperature"][2] == {
+            "depth": {
+                "value": 20,
+                "unit": "cm"
+            },
+            "temperature": {
+                "value": 38.8,
+                "unit": "Cel"
+            }
+        }
+
+class TestSynopAAXXSection6SoilTemperature30cm:
+    """
+    Tests 30376 in Section 6:
+    soil temperature at 30 cm depth = +37.6 C.
+    """
+
+    SYNOP = (
+        "AAXX 21091 40792 42965 00903 10407 20026 38763 49968 57011 "
+        "333 70000 91008 555 10193 29010 66666 "
+        "00506 10432 20388 30376 50380 90354 "
+        "77777 00004 10005 20006 30007 50008 70009 99010"
+    )
+
+    def test_decode(self):
+        data = s.SYNOP().decode(self.SYNOP)
+
+        assert data["soil_temperature"][3] == {
+            "depth": {
+                "value": 30,
+                "unit": "cm"
+            },
+            "temperature": {
+                "value": 37.6,
+                "unit": "Cel"
+            }
+        }
+
+class TestSynopAAXXSection6SoilTemperature50cm:
+    """
+    Tests 50380 in Section 6:
+    soil temperature at 50 cm depth = +38.0 C.
+    """
+
+    SYNOP = (
+        "AAXX 21091 40792 42965 00903 10407 20026 38763 49968 57011 "
+        "333 70000 91008 555 10193 29010 66666 "
+        "00506 10432 20388 30376 50380 90354 "
+        "77777 00004 10005 20006 30007 50008 70009 99010"
+    )
+
+    def test_decode(self):
+        data = s.SYNOP().decode(self.SYNOP)
+
+        assert data["soil_temperature"][4] == {
+            "depth": {
+                "value": 50,
+                "unit": "cm"
+            },
+            "temperature": {
+                "value": 38.0,
+                "unit": "Cel"
+            }
+        }
+
+class TestSynopAAXXSection6SoilTemperature100cm:
+    """
+    Tests 90354 in Section 6:
+    soil temperature at 100 cm depth = +35.4 C.
+    """
+
+    SYNOP = (
+        "AAXX 21091 40792 42965 00903 10407 20026 38763 49968 57011 "
+        "333 70000 91008 555 10193 29010 66666 "
+        "00506 10432 20388 30376 50380 90354 "
+        "77777 00004 10005 20006 30007 50008 70009 99010"
+    )
+
+    def test_decode(self):
+        data = s.SYNOP().decode(self.SYNOP)
+
+        assert data["soil_temperature"][5] == {
+            "depth": {
+                "value": 100,
+                "unit": "cm"
+            },
+            "temperature": {
+                "value": 35.4,
+                "unit": "Cel"
+            }
+        }
+
+class TestSynopAAXXSection7SoilMoisture10cm:
+    """
+    Tests 10005 in Section 7:
+    soil moisture at 10 cm depth = 5%.
+    """
+
+    SYNOP = (
+        "AAXX 21091 40792 42965 00903 10407 20026 38763 49968 57011 "
+        "333 70000 91008 555 10193 29010 66666 "
+        "00506 10432 20388 30376 50380 90354 "
+        "77777 00004 10005 20006 30007 50008 70009 99010"
+    )
+
+    def test_decode(self):
+        data = s.SYNOP().decode(self.SYNOP)
+
+        assert data["soil_moisture"][1] == {
+            "depth": {
+                "value": 10,
+                "unit": "cm"
+            },
+            "moisture": {
+                "value": 5,
+                "unit": "%"
+            }
+        }
+
+class TestSynopAAXXSection7SoilMoisture5cm:
+    """
+    Tests 00004 in Section 7:
+    soil moisture at 5 cm depth = 4%.
+    """
+
+    SYNOP = (
+        "AAXX 21091 40792 42965 00903 10407 20026 38763 49968 57011 "
+        "333 70000 91008 555 10193 29010 66666 "
+        "00506 10432 20388 30376 50380 90354 "
+        "77777 00004 10005 20006 30007 50008 70009 99010"
+    )
+
+    def test_decode(self):
+        data = s.SYNOP().decode(self.SYNOP)
+
+        assert data["soil_moisture"][0] == {
+            "depth": {
+                "value": 5,
+                "unit": "cm"
+            },
+            "moisture": {
+                "value": 4,
+                "unit": "%"
+            }
+        }
+
+class TestSynopAAXXSection7SoilMoisture20cm:
+    """
+    Tests 20006 in Section 7:
+    soil moisture at 20 cm depth = 6%.
+    """
+
+    SYNOP = (
+        "AAXX 21091 40792 42965 00903 10407 20026 38763 49968 57011 "
+        "333 70000 91008 555 10193 29010 66666 "
+        "00506 10432 20388 30376 50380 90354 "
+        "77777 00004 10005 20006 30007 50008 70009 99010"
+    )
+
+    def test_decode(self):
+        data = s.SYNOP().decode(self.SYNOP)
+
+        assert data["soil_moisture"][2] == {
+            "depth": {
+                "value": 20,
+                "unit": "cm"
+            },
+            "moisture": {
+                "value": 6,
+                "unit": "%"
+            }
+        }
+
+class TestSynopAAXXSection7SoilMoisture30cm:
+    """
+    Tests 30007 in Section 7:
+    soil moisture at 30 cm depth = 7%.
+    """
+
+    SYNOP = (
+        "AAXX 21091 40792 42965 00903 10407 20026 38763 49968 57011 "
+        "333 70000 91008 555 10193 29010 66666 "
+        "00506 10432 20388 30376 50380 90354 "
+        "77777 00004 10005 20006 30007 50008 70009 99010"
+    )
+
+    def test_decode(self):
+        data = s.SYNOP().decode(self.SYNOP)
+
+        assert data["soil_moisture"][3] == {
+            "depth": {
+                "value": 30,
+                "unit": "cm"
+            },
+            "moisture": {
+                "value": 7,
+                "unit": "%"
+            }
+        }
+
+class TestSynopAAXXSection7SoilMoisture50cm:
+    """
+    Tests 50008 in Section 7:
+    soil moisture at 50 cm depth = 8%.
+    """
+
+    SYNOP = (
+        "AAXX 21091 40792 42965 00903 10407 20026 38763 49968 57011 "
+        "333 70000 91008 555 10193 29010 66666 "
+        "00506 10432 20388 30376 50380 90354 "
+        "77777 00004 10005 20006 30007 50008 70009 99010"
+    )
+
+    def test_decode(self):
+        data = s.SYNOP().decode(self.SYNOP)
+
+        assert data["soil_moisture"][4] == {
+            "depth": {
+                "value": 50,
+                "unit": "cm"
+            },
+            "moisture": {
+                "value": 8,
+                "unit": "%"
+            }
+        }
+
+class TestSynopAAXXSection7SoilMoisture70cm:
+    """
+    Tests 70009 in Section 7:
+    soil moisture at 70 cm depth = 9%.
+    """
+
+    SYNOP = (
+        "AAXX 21091 40792 42965 00903 10407 20026 38763 49968 57011 "
+        "333 70000 91008 555 10193 29010 66666 "
+        "00506 10432 20388 30376 50380 90354 "
+        "77777 00004 10005 20006 30007 50008 70009 99010"
+    )
+
+    def test_decode(self):
+        data = s.SYNOP().decode(self.SYNOP)
+
+        assert data["soil_moisture"][5] == {
+            "depth": {
+                "value": 70,
+                "unit": "cm"
+            },
+            "moisture": {
+                "value": 9,
+                "unit": "%"
+            }
+        }
+
+class TestSynopAAXXSection7SoilMoisture100cm:
+    """
+    Tests 99010 in Section 7:
+    soil moisture at 100 cm depth = 10%.
+    """
+
+    SYNOP = (
+        "AAXX 21091 40792 42965 00903 10407 20026 38763 49968 57011 "
+        "333 70000 91008 555 10193 29010 66666 "
+        "00506 10432 20388 30376 50380 90354 "
+        "77777 00004 10005 20006 30007 50008 70009 99010"
+    )
+
+    def test_decode(self):
+        data = s.SYNOP().decode(self.SYNOP)
+
+        assert data["soil_moisture"][6] == {
+            "depth": {
+                "value": 100,
+                "unit": "cm"
+            },
+            "moisture": {
+                "value": 10,
+                "unit": "%"
+            }
+        }
