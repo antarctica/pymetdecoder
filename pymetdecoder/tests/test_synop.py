@@ -1659,3 +1659,58 @@ class TestSynopAAXXSection7SoilMoisture100cm:
                 "unit": "%"
             }
         }
+
+
+class TestSynopAAXXSection6TerminatingEquals:
+    """
+    Tests that a terminating '=' does not prevent decoding
+    the final soil-temperature group in Section 6.
+    """
+
+    SYNOP = (
+        "AAXX 03091 40827 42970 01304 10372 21008 38769 40001 57018 "
+        "333 70000 555 10173 29009 66666 "
+        "00482 10404 20358 30356 50364 90348="
+    )
+
+    def test_final_soil_temperature_with_terminator(self):
+        data = s.SYNOP().decode(self.SYNOP)
+
+        assert data["soil_temperature"][-1] == {
+            "depth": {
+                "value": 100,
+                "unit": "cm"
+            },
+            "temperature": {
+                "value": 34.8,
+                "unit": "Cel"
+            }
+        }
+
+
+class TestSynopAAXXSection7TerminatingEquals:
+    """
+    Tests that a terminating '=' does not prevent decoding
+    the final soil-moisture group in Section 7.
+    """
+
+    SYNOP = (
+        "AAXX 21091 40792 42965 00903 10407 20026 38763 49968 57011 "
+        "333 70000 91008 555 10193 29010 66666 "
+        "00506 10432 20388 30376 50380 90354 "
+        "77777 00004 10005 20006 30007 50008 70009 99010="
+    )
+
+    def test_final_soil_moisture_with_terminator(self):
+        data = s.SYNOP().decode(self.SYNOP)
+
+        assert data["soil_moisture"][-1] == {
+            "depth": {
+                "value": 100,
+                "unit": "cm"
+            },
+            "moisture": {
+                "value": 10,
+                "unit": "%"
+            }
+        }

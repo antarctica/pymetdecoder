@@ -498,16 +498,18 @@ class SYNOP(pymetdecoder.Report):
                     # 3 -> 30 cm
                     # 5 -> 50 cm
                     # 9 -> 100 cm
+                    soil_temperature_group = next_group.rstrip("=")
+
                     if (
-                        len(next_group) == 5
-                        and next_group[0] in obs.SoilTemperature._DEPTHS
-                        and next_group[1:].isdigit()
+                        len(soil_temperature_group) == 5
+                        and soil_temperature_group[0] in obs.SoilTemperature._DEPTHS
+                        and soil_temperature_group[1:].isdigit()
                     ):
                         if "soil_temperature" not in data:
                             data["soil_temperature"] = []
 
                         data["soil_temperature"].append(
-                            obs.SoilTemperature().decode(next_group)
+                            obs.SoilTemperature().decode(soil_temperature_group)
                         )
 
                     next_group = next(groups)
@@ -530,20 +532,22 @@ class SYNOP(pymetdecoder.Report):
                     #
                     # The 100 cm observation uses the special
                     # form 990MM.
+                    soil_moisture_group = next_group.rstrip("=")
+
                     if (
-                        len(next_group) == 5
-                        and next_group[0] in obs.SoilMoisture._DEPTHS
+                        len(soil_moisture_group) == 5
+                        and soil_moisture_group[0] in obs.SoilMoisture._DEPTHS
                         and (
-                            next_group[1:3] == "00"
-                            or next_group[:2] == "99"
+                            soil_moisture_group[1:3] == "00"
+                            or soil_moisture_group[:2] == "99"
                         )
-                        and next_group[3:].isdigit()
+                        and soil_moisture_group[3:].isdigit()
                     ):
                         if "soil_moisture" not in data:
                             data["soil_moisture"] = []
 
                         data["soil_moisture"].append(
-                            obs.SoilMoisture().decode(next_group)
+                            obs.SoilMoisture().decode(soil_moisture_group)
                         )
 
                     next_group = next(groups)
