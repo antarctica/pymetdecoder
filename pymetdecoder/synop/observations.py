@@ -510,9 +510,11 @@ class HighestGust(Observation):
         time_before = kwargs.get("time_before")
         measure_period = kwargs.get("measure_period")
         data = {
-            "speed": self.Gust().decode(ff, unit=kwargs.get("unit")),
-            "direction": DirectionDegrees().decode(dd)
+            "speed": self.Gust().decode(ff, unit=kwargs.get("unit"))
         }
+
+        if dd is not None:
+            data["direction"] = DirectionDegrees().decode(dd)
         if time_before is not None:
             data["time_before_obs"] = time_before
         if measure_period is not None:
@@ -1397,6 +1399,49 @@ class SurfaceWind(Observation):
                 return "99 00{}".format(self._encode_value(data))
             else:
                 return self._encode_value(data)
+class MaximumWind24h(Observation):
+    """
+    Maximum wind or gust over 24 hours.
+
+    Section 5 groups:
+        336ddff - maximum wind over 24 hours
+        436ddff - maximum gust over 24 hours
+
+    The first digit identifies the type of observation and is supplied
+    separately by the SYNOP parser.
+    """
+    _CODE_LEN = 4
+
+    def _decode(self, ddff):
+        direction = DirectionDegrees().decode(ddff[0:2])
+        speed = self.Speed().decode(ddff[2:4])
+
+        return {
+            "direction": direction,
+            "speed": speed
+        }
+
+    def _encode(self, data, **kwargs):
+        return "{dd}{ff}".format(
+            dd=DirectionDegrees().encode(
+                data["direction"] if "direction" in data else None,
+                allow_none=True
+            ),
+            ff=self.Speed().encode(
+                data["speed"] if "speed" in data else None
+            )
+        )
+
+    class Speed(Observation):
+        _CODE_LEN = 2
+        _UNIT = "m/s"
+
+        def _decode_convert(self, val, **kwargs):
+            return int(val)
+
+        def _encode_convert(self, val, **kwargs):
+            return int(val)
+
 class SwellWaves(Observation):
     """
     Swell waves
@@ -1453,6 +1498,141 @@ class SwellWaves(Observation):
             return int(val) * 0.5
         def _encode_convert(self, val, **kwargs):
             return int(val * 2)
+class SoilMoisture(Observation):
+    """
+    Soil moisture from SYNOP Section 7.
+
+    Initial supported group:
+        00004 - 5 cm depth, 4 percent volumetric soil moisture
+    """
+
+    _CODE_LEN = 5
+
+    _DEPTHS = {
+        "0": 5,
+        "1": 10,
+        "2": 20,
+        "3": 30,
+        "5": 50,
+        "7": 70,
+        "9": 100,
+    }
+
+    def _decode(self, group):
+        depth_code = group[0]
+        moisture = group[3:5]
+
+        if depth_code not in self._DEPTHS:
+            raise InvalidCode(depth_code, "soil moisture depth")
+
+        return {
+            "depth": {
+                "value": self._DEPTHS[depth_code],
+                "unit": "cm"
+            },
+            "moisture": {
+                "value": int(moisture),
+                "unit": "%"
+            }
+        }
+
+    def _encode(self, data, **kwargs):
+        depth_codes = {
+            5: "0",
+            10: "1",
+            20: "2",
+            30: "3",
+            50: "5",
+            70: "7",
+            100: "9",
+        }
+
+        depth = data["depth"]["value"]
+        moisture = data["moisture"]["value"]
+
+        if depth not in depth_codes:
+            raise InvalidCode(depth, "soil moisture depth")
+
+        if not 0 <= int(moisture) <= 99:
+            raise InvalidCode(moisture, "soil moisture")
+
+        # 100 cm uses the special SYNOP form 990MM.
+        if depth == 100:
+            return "990{:02d}".format(int(moisture))
+
+        return "{}00{:02d}".format(
+            depth_codes[depth],
+            int(moisture)
+        )
+
+class SoilTemperature(Observation):
+    """
+    Soil temperature from SYNOP Section 6.
+
+    Group format:
+        dsnTTT
+
+    d  = soil depth code
+    sn = temperature sign
+    TTT = temperature in tenths of a degree Celsius
+    """
+
+    _CODE_LEN = 5
+
+    _DEPTHS = {
+        "0": 5,
+        "1": 10,
+        "2": 20,
+        "3": 30,
+        "5": 50,
+        "9": 100,
+    }
+
+    def _decode(self, group):
+        depth_code = group[0]
+        sign = group[1]
+        temperature_code = group[2:5]
+
+        if depth_code not in self._DEPTHS:
+            raise InvalidCode(depth_code, "soil temperature depth")
+
+        temperature = SignedTemperature().decode(
+            temperature_code,
+            sign=sign
+        )
+
+        if temperature is None:
+            return None
+
+        return {
+            "depth": {
+                "value": self._DEPTHS[depth_code],
+                "unit": "cm"
+            },
+            "temperature": temperature
+        }
+
+    def _encode(self, data, **kwargs):
+        depth = data["depth"]["value"]
+        temperature = data["temperature"]
+
+        depth_codes = {
+            5: "0",
+            10: "1",
+            20: "2",
+            30: "3",
+            50: "5",
+            100: "9",
+        }
+
+        if depth not in depth_codes:
+            raise InvalidCode(depth, "soil temperature depth")
+
+        return (
+            depth_codes[depth]
+            + SignedTemperature().encode(temperature)
+        )
+
 class Temperature(Observation):
     """
     Temperature observation
