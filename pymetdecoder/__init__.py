@@ -16,6 +16,8 @@
 # IMPORTS
 ################################################################################
 import sys, json, logging, re, warnings
+from typing import Generic, List, TypeVar
+
 from . import conversion
 
 # Setup logging
@@ -51,15 +53,18 @@ class ValidationWarning(UserWarning):
 ################################################################################
 # BASE CLASSES
 ################################################################################
-class Report(object):
+DecodedT = TypeVar("DecodedT", covariant=True)
+
+
+class Report(Generic[DecodedT]):
     """
     Base class for a meteorological report
 
     :param message string: Message to parse
     """
-    def __init__(self):
-        self.not_implemented = []
-    def decode(self, message):
+    def __init__(self) -> None:
+        self.not_implemented: List[str] = []
+    def decode(self, message: str) -> DecodedT:
         """
         Decode function
         """
@@ -77,7 +82,7 @@ class Report(object):
         except Exception as e:
             raise EncodeError(str(e))
         # raise NotImplementedError("encode is not implemented for {}".format(type(self).__name__))
-    def _decode(self, message):
+    def _decode(self, message: str) -> DecodedT:
         """
         Actual decode function. Implement in subclass
         """
