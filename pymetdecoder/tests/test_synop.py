@@ -1060,3 +1060,19 @@ class TestSynopAAXXHighPressure(BaseTestSynop):
     expected = {
         "station_pressure": { "value": 1056.7, "unit": "hPa" }
     }
+
+def test_fm13_missing_observations():
+    nil_report = s.SYNOP().decode("BBXX SHIP ///// 99123 10456 NIL")
+    assert nil_report["obs_time"] is None
+    assert "air_temperature" not in nil_report
+
+    report = s.SYNOP().decode("BBXX SHIP 01001 99123 10456 46/// ///// 5/001 22200 00///")
+    assert report["surface_wind"] is None
+    assert report["pressure_tendency"] == {
+        "tendency": None,
+        "change": {"value": None, "unit": "hPa"},
+    }
+    sea_temperature = report["sea_surface_temperature"]
+    assert sea_temperature is not None
+    assert sea_temperature["value"] is None
+    assert "unit" not in sea_temperature

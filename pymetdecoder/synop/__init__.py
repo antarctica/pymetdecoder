@@ -9,8 +9,11 @@
 # CONFIGURATION
 ################################################################################
 import sys, re, logging, warnings
+from typing import Any, Dict, cast
+
 import pymetdecoder
 from . import observations as obs
+from ._types import SYNOPData as SYNOPData
 RADIATION_TYPES = [
     "positive_net", "negative_net", "global_solar",
     "diffused_solar", "downward_long_wave", "upward_long_wave",
@@ -19,13 +22,11 @@ RADIATION_TYPES = [
 ################################################################################
 # REPORT CLASSES
 ################################################################################
-class SYNOP(pymetdecoder.Report):
-    def _decode(self, message):
-        """
-        Decodes the SYNOP and sets the data attribute with the information
-        """
+class SYNOP(pymetdecoder.Report[SYNOPData]):
+    def _decode(self, message: str) -> SYNOPData:
+        """Decode a SYNOP report into a dictionary of observations."""
         # Initialise data attribute
-        data = {}
+        data: Dict[str, Any] = {}
 
         # Create iterator of the message components
         groups = iter(message.split())
@@ -42,7 +43,7 @@ class SYNOP(pymetdecoder.Report):
             # Get date, time and wind indictator
             YYGGi = next(groups)
             if not self._is_valid_group(YYGGi):
-                warnings.warn(pymetdecoder.InvalidGroup(YYGGi), pymetdecoder.DecodeWarning)
+                warnings.warn(str(pymetdecoder.InvalidGroup(YYGGi)), pymetdecoder.DecodeWarning)
             data["obs_time"] = obs.ObservationTime().decode(YYGGi[0:4])
             data["wind_indicator"] = obs.WindIndicator().decode(YYGGi[4])
 
@@ -85,12 +86,12 @@ class SYNOP(pymetdecoder.Report):
             # If this section ends with NIL, that's the end of the SYNOP
             next_group = next(groups)
             if next_group == "NIL":
-                return data
+                return cast(SYNOPData, data)
 
             ### SECTION 1 ###
             # Get precipitation indicator, weather indicator, base of lowest cloud and visibility
             if not self._is_valid_group(next_group):
-                warnings.warn(pymetdecoder.InvalidGroup(next_group), pymetdecoder.DecodeWarning)
+                warnings.warn(str(pymetdecoder.InvalidGroup(next_group)), pymetdecoder.DecodeWarning)
                 data["precipitation_indicator"] = None
                 data["weather_indicator"] = None
                 data["lowest_cloud_base"] = None
@@ -105,7 +106,7 @@ class SYNOP(pymetdecoder.Report):
             Nddff = next(groups)
             (cloud_cover, surface_wind) = (None, None)
             if not self._is_valid_group(Nddff):
-                warnings.warn(pymetdecoder.InvalidGroup(Nddff), pymetdecoder.DecodeWarning)
+                warnings.warn(str(pymetdecoder.InvalidGroup(Nddff)), pymetdecoder.DecodeWarning)
             else:
                 cloud_cover = obs.CloudCover().decode(Nddff[0:1])
                 surface_wind = obs.SurfaceWind().decode(Nddff[1:5])
@@ -141,7 +142,7 @@ class SYNOP(pymetdecoder.Report):
                     continue
                 if header == i:
                     if not self._is_valid_group(next_group):
-                        warnings.warn(pymetdecoder.InvalidGroup(next_group), pymetdecoder.DecodeWarning)
+                        warnings.warn(str(pymetdecoder.InvalidGroup(next_group)), pymetdecoder.DecodeWarning)
                         next_group = next(groups)
                         continue
                     if i == 1: # Air temperature
@@ -217,7 +218,7 @@ class SYNOP(pymetdecoder.Report):
             ice_groups = []
             if next_group[0:3] == "222":
                 if not self._is_valid_group(next_group):
-                    warnings.warn(pymetdecoder.InvalidGroup(next_group), pymetdecoder.DecodeWarning)
+                    warnings.warn(str(pymetdecoder.InvalidGroup(next_group)), pymetdecoder.DecodeWarning)
                     # logging.warning(pymetdecoder.InvalidGroup(next_group))
                     next_group = next(groups)
                 else:
@@ -242,7 +243,7 @@ class SYNOP(pymetdecoder.Report):
 
                     if header == i:
                         if not self._is_valid_group(next_group):
-                            warnings.warn(pymetdecoder.InvalidGroup(next_group), pymetdecoder.DecodeWarning)
+                            warnings.warn(str(pymetdecoder.InvalidGroup(next_group)), pymetdecoder.DecodeWarning)
                             next_group = next(groups)
                             continue
                         if i == 0: # Sea surface temperature
@@ -315,7 +316,7 @@ class SYNOP(pymetdecoder.Report):
                     try:
                         header = int(next_group[0])
                     except Exception:
-                        warnings.warn(pymetdecoder.InvalidGroup(next_group), pymetdecoder.DecodeWarning)
+                        warnings.warn(str(pymetdecoder.InvalidGroup(next_group)), pymetdecoder.DecodeWarning)
                         next_group = next(groups)
                         continue
                     if last_header is not None and header < last_header and group_5 is None:
@@ -513,7 +514,7 @@ class SYNOP(pymetdecoder.Report):
             data["_not_implemented"] = self.not_implemented
 
         # Return the data
-        return data
+        return cast(SYNOPData, data)
     def _encode(self, data, **kwargs):
         """
         Encodes the SYNOP from data

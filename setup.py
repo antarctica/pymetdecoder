@@ -17,6 +17,8 @@ setup(
         "pymetdecoder",
         "pymetdecoder.synop"
     ],
+    package_data     = {"pymetdecoder": ["py.typed"]},
+    python_requires  = ">=3.8",
     classifiers = [
         "Development Status :: 5 - Production/Stable",
         "Intended Audience :: Science/Research",
